@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TeachAI — User Journey · Claude Conversation Hackathon 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --royal: #1a4fd6;
+    --ink: #0d0d0d;
+    --paper: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--royal); color: var(--paper); }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+  .font-display { font-family: 'Caveat', cursive; }
+
+  /* ---- TeachAI design system (from src/index.css) ---- */
+  .rough-border {
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    border: 2px solid var(--ink);
+  }
+  .rough-border-blue {
+    border-radius: 15px 255px 15px 225px/225px 15px 255px 15px;
+    border: 2px solid var(--royal);
+  }
+  .is-dashed { border-style: dashed !important; }
+  .is-royal { border-color: var(--royal) !important; }
+  .sketch-shadow { box-shadow: 4px 4px 0px 0px var(--ink); }
+  .sketch-shadow-blue { box-shadow: -4px 4px 0px 0px var(--royal); }
+  .scribble-underline { position: relative; display: inline-block; }
+  .scribble-underline::after {
+    content: '';
+    position: absolute;
+    width: 100%; height: 6px;
+    bottom: -2px; left: 0;
+    background: var(--royal);
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    transform: rotate(-1deg);
+  }
+  .kicker {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    opacity: 0.5;
+  }
+  .rotate-l { transform: rotate(-1deg); }
+  .rotate-r { transform: rotate(0.6deg); }
+
+  /* ---- Hero ---- */
+  header { padding: 88px 0 64px; text-align: center; position: relative; overflow: hidden; }
+  header .sparkle { position: absolute; top: 48px; left: 8%; color: var(--royal); opacity: 0.2; transform: rotate(-12deg); font-size: 48px; }
+  header .squiggle { position: absolute; bottom: 40px; right: 8%; opacity: 0.1; transform: rotate(12deg); }
+  .hero-badge {
+    display: inline-block;
+    padding: 8px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 32px;
+  }
+  h1 {
+    font-family: 'Caveat', cursive;
+    font-size: clamp(56px, 9vw, 104px);
+    line-height: 0.95;
+    font-weight: 700;
+    transform: rotate(-2deg);
+    margin-bottom: 28px;
+  }
+  h1 .blue { color: var(--royal); }
+  .hero-sub { max-width: 620px; margin: 0 auto; font-size: 17px; opacity: 0.75; }
+
+  .hero-formula {
+    margin: 48px auto 0;
+    display: flex; align-items: stretch; justify-content: center;
+    gap: 18px; flex-wrap: wrap;
+  }
+  .hero-formula .step { padding: 14px 22px; font-size: 14px; font-weight: 700; background: var(--paper); }
+  .hero-formula .step small { display: block; font-weight: 400; font-size: 11.5px; opacity: 0.55; margin-top: 2px; }
+  .hero-formula .arrow { align-self: center; font-family: 'Caveat', cursive; font-size: 34px; color: var(--royal); font-weight: 700; }
+
+  /* ---- Sections ---- */
+  section { padding: 56px 0; }
+  h2.section-title {
+    font-family: 'Caveat', cursive;
+    font-size: clamp(36px, 5vw, 52px);
+    font-weight: 700;
+    transform: rotate(-1deg);
+    margin: 6px 0 14px;
+  }
+  .lede { opacity: 0.75; max-width: 640px; margin-bottom: 40px; font-size: 15.5px; }
+  .divider { border: none; border-top: 2px dashed var(--ink); opacity: 0.25; margin: 0 24px; }
+
+  /* ---- Journey ---- */
+  .stage { display: grid; grid-template-columns: 60px 1fr; gap: 22px; padding-bottom: 44px; position: relative; }
+  .stage:not(.last)::before {
+    content: ''; position: absolute; left: 29px; top: 62px; bottom: 0;
+    border-left: 2px dashed var(--ink); opacity: 0.3;
+  }
+  .stage-num {
+    width: 60px; height: 60px; flex-shrink: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Caveat', cursive; font-size: 32px; font-weight: 700;
+    color: var(--royal); background: var(--paper);
+  }
+  .stage-card { padding: 28px; background: var(--paper); }
+  .stage-card h3 { font-family: 'Caveat', cursive; font-size: 34px; font-weight: 700; line-height: 1.1; margin-bottom: 2px; }
+  .stage-tag { font-size: 13px; opacity: 0.55; font-style: italic; margin-bottom: 14px; }
+  .stage-card p { font-size: 14.5px; opacity: 0.9; }
+  .stage-card ul { margin: 12px 0 0 20px; font-size: 14.5px; opacity: 0.9; }
+  .stage-card li { margin-bottom: 8px; }
+
+  .fork-label {
+    display: inline-block; padding: 4px 14px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;
+  }
+  .fork-a { color: var(--royal); }
+  .fork-b { color: var(--ink); }
+
+  /* ---- Chat mock ---- */
+  .chat-mock { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 82%; padding: 14px 18px; font-size: 13.5px; line-height: 1.6; }
+  .bubble.coach { align-self: flex-start; background: var(--paper); }
+  .bubble.user { align-self: flex-end; background: var(--royal); color: var(--paper); }
+  .choice-row { display: flex; gap: 12px; flex-wrap: wrap; padding-left: 4px; }
+  .rough-button-blue {
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    border: 2px solid var(--royal);
+    background: var(--royal); color: var(--paper);
+    padding: 12px 22px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px;
+  }
+  .rough-button-plain {
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    border: 2px solid var(--ink);
+    background: var(--paper); color: var(--ink);
+    padding: 12px 22px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px;
+  }
+
+  /* ---- Module mock ---- */
+  .module-mock { margin-top: 20px; background: var(--paper); overflow: hidden; }
+  .module-head { display: flex; align-items: center; gap: 16px; padding: 18px 22px; }
+  .module-head .n {
+    width: 38px; height: 38px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: var(--royal); font-size: 15px;
+  }
+  .module-head .t { font-weight: 700; font-size: 15px; }
+  .module-head .s { display: block; font-weight: 400; font-size: 12px; opacity: 0.6; margin-top: 2px; }
+  .module-body { padding: 0 22px 22px; border-top: 2px dashed var(--ink); margin: 0 22px; padding-top: 18px; padding-left: 0; padding-right: 0; }
+  .move-pill {
+    display: inline-block; padding: 6px 14px; color: var(--royal);
+    font-size: 12.5px; font-weight: 700; margin-bottom: 12px;
+  }
+  .prompt-block {
+    background: var(--ink); color: var(--paper);
+    padding: 16px 18px; font-size: 12.5px; line-height: 1.7;
+    white-space: pre-wrap; margin: 8px 0 12px;
+  }
+  .mock-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .good-generic { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .good-generic .cell { padding: 14px 16px; font-size: 12.5px; }
+  .good-generic .cell .kicker { display: block; margin-bottom: 6px; }
+
+  /* ---- Skills grid ---- */
+  .skills-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .skill-card { padding: 22px; background: var(--paper); }
+  .skill-card h4 { font-family: 'Caveat', cursive; font-size: 27px; font-weight: 700; margin-bottom: 6px; }
+  .skill-card p { font-size: 13.5px; opacity: 0.85; }
+  .skill-card .where { margin-top: 12px; font-size: 12px; font-weight: 700; color: var(--royal); }
+
+  /* ---- Under the hood ---- */
+  .hood-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .hood-card { padding: 22px; background: var(--paper); }
+  .hood-card .file { font-size: 12px; font-weight: 700; color: var(--royal); margin-bottom: 8px; display: block; }
+  .hood-card p { font-size: 13.5px; opacity: 0.85; }
+
+  footer { padding: 56px 0 72px; text-align: center; }
+  footer .sign-off { font-family: 'Caveat', cursive; font-size: 34px; font-weight: 700; transform: rotate(-1.5deg); display: inline-block; margin-bottom: 10px; }
+  footer p { font-size: 13px; opacity: 0.55; }
+
+  @media (max-width: 640px) {
+    .stage { grid-template-columns: 44px 1fr; gap: 14px; }
+    .stage-num { width: 44px; height: 44px; font-size: 24px; }
+    .stage:not(.last)::before { left: 21px; top: 46px; }
+    .good-generic { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="sparkle">✦</div>
+  <svg class="squiggle" width="110" height="110" viewBox="0 0 100 100" fill="none">
+    <path d="M10 50 C 30 10, 70 10, 90 50 C 70 90, 30 90, 10 50" stroke="#0d0d0d" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <div class="wrap">
+    <div class="hero-badge rough-border-blue" style="color: var(--royal);">Claude Conversation Hackathon 2026</div>
+    <h1>teach the teacher,<br><span class="blue scribble-underline">not just the lesson</span></h1>
+    <p class="hero-sub">TeachAI coaches teachers on planning lessons <em>with</em> AI — so they can do it again next week without us. Meet Melissa, a Precalculus teacher, and the journey from her mediocre lesson plan to a rebuilt one she improved herself.</p>
+
+    <div class="hero-formula">
+      <div class="step rough-border sketch-shadow">📄 her real lesson plan<small>rational functions, fell flat last year</small></div>
+      <div class="arrow">→</div>
+      <div class="step rough-border-blue sketch-shadow-blue">🎓 a training session<small>named prompting moves, run live</small></div>
+      <div class="arrow">→</div>
+      <div class="step rough-border sketch-shadow">✨ rebuilt lesson + real skills<small>downloadable, repeatable</small></div>
+    </div>
+  </div>
+</header>
+
+<hr class="divider">
+
+<section>
+  <div class="wrap">
+    <p class="kicker">The big idea</p>
+    <h2 class="section-title">AI that plans <em>for</em> you teaches you nothing.</h2>
+    <p class="lede">Every module in TeachAI is anchored to a quote from <strong>her own plan</strong>, teaches a <strong>named prompting move</strong>, and hands her a complete prompt already filled in with her topic and grade — which she can run live and watch work. The lesson plan gets better, and so does she.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <div class="wrap">
+    <p class="kicker">User journey</p>
+    <h2 class="section-title">One conversation, two paths</h2>
+    <p class="lede">Everything happens in a single chat transcript — no dashboards, no menus. The fork: does Melissa have a lesson plan to show us?</p>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">1</div>
+      <div class="stage-card rough-border sketch-shadow">
+        <h3>Landing</h3>
+        <div class="stage-tag">"how can i help you Melissa?"</div>
+        <p>A single oversized handwritten question and one text box. She types what she's actually working on — no onboarding, no account, no feature tour.</p>
+        <div class="chat-mock">
+          <div class="bubble user rough-border-blue" style="border-color: var(--royal);">I'm teaching rational functions on Thursday and it fell flat last year...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">2</div>
+      <div class="stage-card rough-border sketch-shadow rotate-r">
+        <h3>The coach replies</h3>
+        <div class="stage-tag">Streamed, in persona — a colleague, not a vending machine</div>
+        <p>The coach responds to what she said (streamed live, so it feels like talking), then ends every first exchange the same way:</p>
+        <div class="chat-mock">
+          <div class="bubble coach rough-border sketch-shadow">Rational functions falling flat is usually a "here are the steps" problem — the interesting part got optimized out. Before I say more: do you have a sample lesson plan from last year? I'd rather read the real thing than a description of it.</div>
+          <div class="choice-row">
+            <span class="rough-button-blue">Yes, I have one →</span>
+            <span class="rough-button-plain">No, not right now</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">3</div>
+      <div class="stage-card rough-border sketch-shadow">
+        <span class="fork-label rough-border-blue fork-a">Path A · she has a plan</span>
+        <h3>Attach &amp; analyze</h3>
+        <div class="stage-tag">"I want to read the real thing, not a description of it."</div>
+        <p>She attaches her plan (PDF or plain text). Claude reads it and returns a diagnosis in three parts — every claim anchored to a quote from <em>her</em> document:</p>
+        <ul>
+          <li><strong>What I read</strong> — the plan reflected back, plus what genuinely works (she keeps what's good)</li>
+          <li><strong>Where it is actually weak</strong> — each weakness with the exact quote as evidence, why it matters, and who it loses ("this scaffold quietly removes the math for your students who need it most")</li>
+          <li><strong>A training session</strong> — one module per weakness, ready to work through</li>
+        </ul>
+        <p style="margin-top: 12px;">While the minute-long analysis runs, the working label walks forward — <em>"Finding where the thinking actually happens..." · "Checking which scaffolds quietly remove the math..."</em> — so the wait reads as care, not lag.</p>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">4</div>
+      <div class="stage-card rough-border sketch-shadow rotate-l">
+        <span class="fork-label rough-border-blue fork-a">Path A · the heart of the product</span>
+        <h3>The training session</h3>
+        <div class="stage-tag">One module per weakness — each teaches a named prompting move</div>
+        <p>Every module gives her the move's name, why it fixes <em>her</em> weakness, and a complete prompt already filled in with her topic and grade. <strong>Run it here</strong> executes it live so she watches the move work before she's asked to believe in it.</p>
+
+        <div class="module-mock rough-border sketch-shadow-blue">
+          <div class="module-head">
+            <span class="n rough-border-blue">1</span>
+            <span class="t">Make the productive struggle visible
+              <span class="s">Fixes: the worked example does all the thinking</span>
+            </span>
+          </div>
+          <div class="module-body">
+            <span class="move-pill rough-border-blue">💡 Move: constrain what the AI may remove</span>
+            <p class="kicker" style="margin-bottom: 4px;">Your prompt — already filled in for this lesson</p>
+            <div class="prompt-block rough-border">Redesign the opening problem of my 11th-grade rational functions lesson so students must decide WHICH tool to use, not just execute one. Keep the numbers simple — the difficulty should live in the decision, not the arithmetic. Do not include a worked example.</div>
+            <div class="mock-btn-row">
+              <span class="rough-button-plain" style="font-size: 12px; padding: 9px 16px;">⧉ Copy prompt</span>
+              <span class="rough-button-blue" style="font-size: 12px; padding: 9px 16px;">▶ Run it here</span>
+            </div>
+            <div class="good-generic">
+              <div class="cell rough-border is-dashed">
+                <span class="kicker">A good answer looks like</span>
+                A problem with two plausible solution paths where choosing is the point.
+              </div>
+              <div class="cell rough-border is-dashed">
+                <span class="kicker">If it comes back generic, send</span>
+                <em>"You gave me a procedure with a hat on. Where is the decision students make?"</em>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p style="margin-top: 18px;">A running tally — <strong>2/4 moves tried</strong> — nudges completion without forcing it. The pushback line is its own lesson: <em>the first answer is a draft, and you're allowed to argue with it.</em></p>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">5</div>
+      <div class="stage-card rough-border sketch-shadow">
+        <span class="fork-label rough-border-blue fork-a">Path A · the payoff</span>
+        <h3>Rebuild my lesson</h3>
+        <div class="stage-tag">"Put the moves together and see your lesson rebuilt."</div>
+        <p>One button applies every move at once. Claude rebuilds the full lesson — big idea, the questions she'll ask, scaffolds that keep the demand high, phase timing, exit ticket — and she downloads it. It's visibly <em>her</em> lesson, upgraded by moves she just practiced.</p>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-num rough-border-blue">3b</div>
+      <div class="stage-card rough-border is-dashed sketch-shadow rotate-r">
+        <span class="fork-label rough-border fork-b">Path B · no plan to share</span>
+        <h3>The intake interview</h3>
+        <div class="stage-tag">Modeling the most important lesson: context in, quality out</div>
+        <p>No plan? Claude asks <strong>four questions that would change what the lesson looks like</strong> — not a form for form's sake. Grade and class makeup, where students actually are, what's gone wrong before, constraints. Then it builds a complete plan from her answers. The meta-lesson lands either way: good AI output starts with good context.</p>
+      </div>
+    </div>
+
+    <div class="stage last">
+      <div class="stage-num rough-border-blue">6</div>
+      <div class="stage-card rough-border sketch-shadow">
+        <h3>Done — but repeatable</h3>
+        <div class="stage-tag">Both paths end on a downloadable lesson plan</div>
+        <p>The composer stays open: <em>"What else do you want to work on?"</em> The real success metric isn't this Thursday's lesson — it's whether Melissa opens a blank Claude chat next week and uses the moves on her own.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <div class="wrap">
+    <p class="kicker">Curriculum</p>
+    <h2 class="section-title">The AI skills she actually walks away with</h2>
+    <p class="lede">Each one is taught in the moment it's needed, on her own document, with a named move she can reuse.</p>
+    <div class="skills-grid">
+      <div class="skill-card rough-border sketch-shadow">
+        <h4>Context provision</h4>
+        <p>The intake interview and "read the real thing" both model it: AI quality starts with what you give it.</p>
+        <div class="where">Stages 2, 3, 3b</div>
+      </div>
+      <div class="skill-card rough-border sketch-shadow rotate-r">
+        <h4>Specificity &amp; constraints</h4>
+        <p>Every module prompt shows what precise asks look like: "the difficulty should live in the decision, not the arithmetic."</p>
+        <div class="where">Stage 4</div>
+      </div>
+      <div class="skill-card rough-border sketch-shadow">
+        <h4>Pushing back on generic output</h4>
+        <p>Each module ships a ready-made pushback line. First answers are drafts; arguing with AI is a skill.</p>
+        <div class="where">Stage 4</div>
+      </div>
+      <div class="skill-card rough-border sketch-shadow rotate-l">
+        <h4>Evaluating output</h4>
+        <p>"A good answer looks like..." gives her criteria before she reads the result — judgment, not vibes.</p>
+        <div class="where">Stage 4</div>
+      </div>
+      <div class="skill-card rough-border sketch-shadow">
+        <h4>Task decomposition</h4>
+        <p>One weakness, one move, one prompt at a time — then compose everything at the rebuild.</p>
+        <div class="where">Stages 4–5</div>
+      </div>
+      <div class="skill-card rough-border sketch-shadow rotate-r">
+        <h4>Reusable moves, not recipes</h4>
+        <p>Moves are named so they transfer: next week she can "constrain what the AI may remove" on a totally different lesson.</p>
+        <div class="where">Whole journey</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section>
+  <div class="wrap">
+    <p class="kicker">Under the hood</p>
+    <h2 class="section-title">How it's built</h2>
+    <p class="lede">React 19 + Vite + Tailwind v4, calling the Claude API (<code>claude-opus-5</code>) directly from the browser for the demo.</p>
+    <div class="hood-grid">
+      <div class="hood-card rough-border sketch-shadow">
+        <span class="file">src/lib/claude.ts</span>
+        <p>Coach persona and every API call. Conversation streams at low effort; analysis and plan-building run non-streamed at high effort.</p>
+      </div>
+      <div class="hood-card rough-border sketch-shadow">
+        <span class="file">src/lib/schemas.ts</span>
+        <p>Structured outputs — the analysis (strengths, evidence-anchored weaknesses, training modules) and the full lesson plan come back as validated JSON, never parsed prose.</p>
+      </div>
+      <div class="hood-card rough-border sketch-shadow">
+        <span class="file">src/App.tsx</span>
+        <p>A phase machine (landing → coaching → choosing → analyzing → training → building → done) rendering one continuous transcript.</p>
+      </div>
+      <div class="hood-card rough-border sketch-shadow">
+        <span class="file">src/components/</span>
+        <p>TrainingWorkspace (modules with Run-it-here), IntakePanel (path B questions), PlanCard (the downloadable rebuild).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="sign-off">so she can do it again next week <span style="color: var(--royal);">without us</span> ✦</div>
+    <p>TeachAI · Claude Conversation Hackathon 2026 · branch <code>krishnav1</code></p>
+  </div>
+</footer>
+
+</body>
+</html>
