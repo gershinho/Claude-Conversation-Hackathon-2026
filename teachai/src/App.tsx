@@ -9,6 +9,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import LoginGate from '@/components/LoginGate'
+import { DocViewer, DocViewerTab } from '@/components/DocViewer'
 import TrainingWorkspace, { type PromptRun } from '@/components/TrainingWorkspace'
 import IntakePanel from '@/components/IntakePanel'
 import PlanCard from '@/components/PlanCard'
@@ -72,7 +74,12 @@ const BUILDING_STEPS = [
 ]
 
 export default function App() {
+  const [signedIn, setSignedIn] = useState(false)
   const [phase, setPhase] = useState<Phase>('landing')
+  // Name of the plan she attached, kept so the document pane has something to
+  // show after `attachment` is cleared on submit.
+  const [docName, setDocName] = useState<string | null>(null)
+  const [docMinimized, setDocMinimized] = useState(false)
   const [items, setItems] = useState<Item[]>([])
   const [turns, setTurns] = useState<ChatTurn[]>([])
 
@@ -161,6 +168,8 @@ export default function App() {
       setInput('')
       const source = attachment.source
       add({ kind: 'user', text: note, attachment: attachment.name })
+      setDocName(attachment.name)
+      setDocMinimized(false)
       setAttachment(null)
       await analyze(source)
       return
@@ -318,6 +327,8 @@ export default function App() {
 
   const restart = () => {
     setPhase('landing')
+    setDocName(null)
+    setDocMinimized(false)
     setItems([])
     setTurns([])
     setInput('')
@@ -327,6 +338,8 @@ export default function App() {
     setIntake(null)
     setPlan(null)
   }
+
+  if (!signedIn) return <LoginGate onSignIn={() => setSignedIn(true)} />
 
   // -------------------------------------------------------------------------
   // Landing
@@ -386,6 +399,7 @@ export default function App() {
   // -------------------------------------------------------------------------
 
   const canType = !busy && !streaming
+  const docOpen = Boolean(docName) && !docMinimized
   const placeholder =
     phase === 'awaiting_plan'
       ? attachment
@@ -398,7 +412,7 @@ export default function App() {
           : 'Say more...'
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper">
+    <div className="h-screen overflow-hidden flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper">
       <header className="sticky top-0 z-40 bg-paper border-b-2 border-dashed border-ink px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Sparkles size={20} className="text-royal" />
@@ -415,8 +429,14 @@ export default function App() {
         </div>
       </header>
 
+      <div className="flex flex-grow overflow-hidden relative">
+        <div
+          className={`flex flex-col h-full relative shrink-0 ${
+            docOpen ? 'w-full md:w-2/5 md:border-r-2 md:border-ink md:border-dashed' : 'w-full'
+          }`}
+        >
       <main className="flex-grow overflow-y-auto px-4 md:px-8 pt-8 pb-56 scroll-smooth">
-        <div className="max-w-4xl mx-auto flex flex-col gap-6">
+        <div className={`${docOpen ? '' : 'max-w-4xl mx-auto'} flex flex-col gap-6`}>
           {items.map((item) => {
             switch (item.kind) {
               case 'user':
@@ -538,7 +558,7 @@ export default function App() {
       </main>
 
       {phase === 'awaiting_plan' && !attachment && (
-        <div className="fixed bottom-32 left-0 w-full px-4 md:px-8 z-40 pointer-events-none">
+        <div className="absolute bottom-32 left-0 w-full px-4 md:px-8 z-40 pointer-events-none">
           <div className="max-w-4xl mx-auto">
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -561,6 +581,14 @@ export default function App() {
         onAttachClick={() => fileInputRef.current?.click()}
         onClearAttachment={() => setAttachment(null)}
       />
+        </div>
+
+        {docName && !docMinimized && (
+          <DocViewer filename={docName} onMinimize={() => setDocMinimized(true)} />
+        )}
+        {docName && docMinimized && <DocViewerTab onRestore={() => setDocMinimized(false)} />}
+      </div>
+
       <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" />
     </div>
   )
@@ -596,7 +624,7 @@ function Composer({
   const canSend = !disabled && (value.trim().length > 0 || Boolean(attachment))
 
   return (
-    <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
+    <div className="absolute bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
       <div className="max-w-4xl mx-auto flex flex-col gap-2">
         {attachment && (
           <div className="flex animate-in fade-in slide-in-from-bottom-2 duration-300">
