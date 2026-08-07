@@ -30,6 +30,7 @@ export type TrainingModule = {
 export type Analysis = {
   plan_title: string
   course_and_topic: string
+  document_markdown: string
   read_back: string
   strengths: string[]
   weaknesses: Weakness[]
@@ -44,6 +45,7 @@ export const ANALYSIS_SCHEMA = {
   required: [
     'plan_title',
     'course_and_topic',
+    'document_markdown',
     'read_back',
     'strengths',
     'weaknesses',
@@ -56,6 +58,11 @@ export const ANALYSIS_SCHEMA = {
     course_and_topic: {
       type: 'string',
       description: 'Course, grade level, and specific topic. e.g. "Precalculus, 11th grade - graphing rational functions"',
+    },
+    document_markdown: {
+      type: 'string',
+      description:
+        'A faithful markdown transcription of HER plan exactly as uploaded — headings, lists, and timings preserved; no improvements, no commentary, no fixes. Condense only true boilerplate. Keep under roughly 1500 words.',
     },
     read_back: {
       type: 'string',
@@ -137,50 +144,49 @@ export const ANALYSIS_SCHEMA = {
 } as const
 
 // ---------------------------------------------------------------------------
-// Intake questions (the "no sample plans" path)
+// Adaptive intake (the "no sample plans" path) — one question per turn.
+// After every answer Claude re-decides: ask the single most load-bearing
+// question left, or declare it has enough and build.
 // ---------------------------------------------------------------------------
 
-export type IntakeQuestion = {
-  id: string
+export type IntakeStep = {
+  ready: boolean
+  coach_line: string
   question: string
   why: string
   placeholder: string
   suggestions: string[]
 }
 
-export type Intake = {
-  intro: string
-  questions: IntakeQuestion[]
-}
-
-export const INTAKE_SCHEMA = {
+export const INTAKE_STEP_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['intro', 'questions'],
+  required: ['ready', 'coach_line', 'question', 'why', 'placeholder', 'suggestions'],
   properties: {
-    intro: {
-      type: 'string',
-      description: 'Two sentences, second person, framing why you are asking before you build anything.',
+    ready: {
+      type: 'boolean',
+      description:
+        'true the moment you know enough to build a plan she would recognize as hers — then every field below except coach_line is an empty string or empty array.',
     },
-    questions: {
+    coach_line: {
+      type: 'string',
+      description:
+        'One or two short sentences, second person. Acknowledge what you just learned or already know, and either lead into the question or (when ready) say what you are about to build. Plain text.',
+    },
+    question: {
+      type: 'string',
+      description: 'The ONE question whose answer would most change the plan. One sentence. Empty string when ready.',
+    },
+    why: { type: 'string', description: 'Short note on what this changes about the plan. Empty string when ready.' },
+    placeholder: {
+      type: 'string',
+      description: 'A realistic example answer for a Precalculus teacher. Empty string when ready.',
+    },
+    suggestions: {
       type: 'array',
-      description: 'Exactly four questions. Each one must change what the lesson plan looks like.',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['id', 'question', 'why', 'placeholder', 'suggestions'],
-        properties: {
-          id: { type: 'string', description: 'snake_case identifier' },
-          question: { type: 'string', description: 'The question, one sentence.' },
-          why: { type: 'string', description: 'Short note on what this changes about the plan.' },
-          placeholder: { type: 'string', description: 'A realistic example answer for a Precalculus teacher.' },
-          suggestions: {
-            type: 'array',
-            description: 'Two or three tappable one-line answers she can pick instead of typing.',
-            items: { type: 'string' },
-          },
-        },
-      },
+      description:
+        'Two to four tappable one-line answers she can pick instead of typing — real, specific answers, not categories. Empty array when ready.',
+      items: { type: 'string' },
     },
   },
 } as const
@@ -265,6 +271,123 @@ export const LESSON_PLAN_SCHEMA = {
       type: 'string',
       description:
         'Two sentences from the coach to Melissa: the one prompting move that produced the strongest part of this plan, so she can reuse it.',
+    },
+  },
+} as const
+
+// ---------------------------------------------------------------------------
+// Guided session — one turn of the A→B prompting loop
+// ---------------------------------------------------------------------------
+
+export type BuddyMood = 'idle' | 'thinking' | 'excited' | 'nudge' | 'celebrate'
+
+export type PromptFeedback = {
+  quality: 'vague' | 'decent' | 'strong'
+  move_used: string
+  coached_move: string
+  tip: string
+}
+
+export type SessionTurn = {
+  verdict: 'pass' | 'gate' | 'answer'
+  buddy_message: string
+  buddy_mood: BuddyMood
+  prompt_feedback: PromptFeedback
+  updated_document: string
+  rubric: { id: string; satisfied: boolean }[]
+  first_change_hint: string
+}
+
+export type RubricItem = {
+  id: string
+  title: string
+  move: string
+  satisfied: boolean
+}
+
+/** The session curriculum comes straight from the analysis: one rubric item
+ *  per training module, pairing the weakness with its prompting move. */
+export function buildRubric(analysis: Analysis): RubricItem[] {
+  return analysis.modules.map((m) => ({
+    id: m.targets_weakness
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, ''),
+    title: m.targets_weakness,
+    move: m.prompting_move,
+    satisfied: false,
+  }))
+}
+
+export const SESSION_TURN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'verdict',
+    'buddy_message',
+    'buddy_mood',
+    'prompt_feedback',
+    'updated_document',
+    'rubric',
+    'first_change_hint',
+  ],
+  properties: {
+    verdict: {
+      type: 'string',
+      enum: ['pass', 'gate', 'answer'],
+      description:
+        'pass = apply her edit to the document. gate = intercept a clearly vague prompt, document unchanged. answer = she asked a question; reply in the bubble, document unchanged.',
+    },
+    buddy_message: {
+      type: 'string',
+      description:
+        "Claw'd's speech bubble. One or two short sentences, playful teaching-assistant voice. Plain text, no markdown.",
+    },
+    buddy_mood: {
+      type: 'string',
+      enum: ['idle', 'thinking', 'excited', 'nudge', 'celebrate'],
+      description: 'excited when she lands a move or a rubric item flips, nudge when gating or coaching, celebrate only when every rubric item is satisfied.',
+    },
+    prompt_feedback: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['quality', 'move_used', 'coached_move', 'tip'],
+      properties: {
+        quality: { type: 'string', enum: ['vague', 'decent', 'strong'] },
+        move_used: {
+          type: 'string',
+          description: 'The named rubric prompting move she just demonstrated unprompted, or "" if none.',
+        },
+        coached_move: {
+          type: 'string',
+          description: 'The named move the buddy is nudging her toward this turn, or "" if none.',
+        },
+        tip: { type: 'string', description: 'One-line transferable prompting tip, or "".' },
+      },
+    },
+    updated_document: {
+      type: 'string',
+      description:
+        'The COMPLETE document markdown after applying exactly what she asked — nothing more. Empty string when verdict is gate or answer.',
+    },
+    rubric: {
+      type: 'array',
+      description:
+        'The complete rubric state after this turn, every item re-judged against the current document. An edit that undoes progress flips its item back to false.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'satisfied'],
+        properties: {
+          id: { type: 'string' },
+          satisfied: { type: 'boolean' },
+        },
+      },
+    },
+    first_change_hint: {
+      type: 'string',
+      description:
+        'The exact first line of the earliest section you changed, so the UI can scroll to it. Empty string when verdict is gate or answer.',
     },
   },
 } as const

@@ -11,22 +11,27 @@ import {
 } from 'lucide-react'
 import LoginGate from '@/components/LoginGate'
 import { DocViewer, DocViewerTab } from '@/components/DocViewer'
-import TrainingWorkspace, { type PromptRun } from '@/components/TrainingWorkspace'
-import IntakePanel from '@/components/IntakePanel'
-import PlanCard from '@/components/PlanCard'
+import BuddyStage, { type BuddyAnchor, type BuddyState } from '@/components/BuddyStage'
+import SessionDocPane from '@/components/SessionDocPane'
+import SessionKickoff from '@/components/SessionKickoff'
+import SkillReport, { type FeedbackRecord } from '@/components/SkillReport'
+import AskCard from '@/components/AskCard'
+import PlanCard, { toMarkdown } from '@/components/PlanCard'
 import {
   analyzeLessonPlan,
   buildImprovedPlan,
-  buildPlanFromIntake,
+  buildPlanFromScratch,
   friendlyError,
-  generateIntake,
-  runTrainingPrompt,
+  INTAKE_CAP,
+  nextIntakeStep,
+  runSessionTurn,
   streamCoach,
   type ChatTurn,
+  type IntakeQA,
   type PlanSource,
 } from '@/lib/claude'
 import { readPlanFile } from '@/lib/file'
-import type { Analysis, Intake, LessonPlan } from '@/lib/schemas'
+import { buildRubric, type Analysis, type BuddyMood, type IntakeStep, type LessonPlan, type RubricItem } from '@/lib/schemas'
 
 type Phase =
   | 'landing'
@@ -34,7 +39,9 @@ type Phase =
   | 'choosing'
   | 'awaiting_plan'
   | 'analyzing'
-  | 'training'
+  | 'reviewing'
+  | 'session'
+  | 'session_done'
   | 'intake'
   | 'building'
   | 'done'
@@ -45,9 +52,25 @@ type Item =
   | { id: number; kind: 'choice'; answered: 'yes' | 'no' | null }
   | { id: number; kind: 'working'; label: string }
   | { id: number; kind: 'error'; text: string }
-  | { id: number; kind: 'analysis' }
-  | { id: number; kind: 'intake' }
+  | { id: number; kind: 'kickoff' }
+  | { id: number; kind: 'skills' }
+  | { id: number; kind: 'ask'; step: IntakeStep; answered: string | null }
   | { id: number; kind: 'plan' }
+
+// The guided session: her doc, the hidden target it is walking toward, and
+// everything the buddy needs to coach the walk.
+type Session = {
+  docA: string
+  doc: string
+  prevDoc: string | null
+  targetMd: string
+  rubric: RubricItem[]
+  history: ChatTurn[]
+  lastTurnGated: boolean
+  feedback: FeedbackRecord[]
+}
+
+type TargetState = { status: 'idle' | 'building' | 'ready' | 'failed'; plan: LessonPlan | null }
 
 type NewItem = Item extends infer T ? (T extends Item ? Omit<T, 'id'> : never) : never
 
@@ -87,20 +110,31 @@ export default function App() {
   const [attachment, setAttachment] = useState<{ name: string; source: PlanSource } | null>(null)
 
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
-  const [runs, setRuns] = useState<Record<number, PromptRun>>({})
-  const [intake, setIntake] = useState<Intake | null>(null)
+  const [intakeQA, setIntakeQA] = useState<IntakeQA[]>([])
   const [plan, setPlan] = useState<LessonPlan | null>(null)
+
+  const [target, setTarget] = useState<TargetState>({ status: 'idle', plan: null })
+  const [session, setSession] = useState<Session | null>(null)
+  // Bumped on every applied edit so flash animations and the scroll-to-change
+  // retrigger even when a block index repeats.
+  const [version, setVersion] = useState(0)
+  const [sessionBusy, setSessionBusy] = useState(false)
+  const [buddy, setBuddy] = useState<BuddyState>({ mood: 'idle', anchor: 'composer', message: '' })
 
   const nextId = useRef(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const choreo = useRef<number[]>([])
 
-  const busy = phase === 'analyzing' || phase === 'building' || items.some((i) => i.kind === 'working')
+  const busy =
+    phase === 'analyzing' || phase === 'building' || sessionBusy || items.some((i) => i.kind === 'working')
   const streaming = items.some((i) => i.kind === 'coach' && i.streaming)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [items, analysis, intake, plan])
+  }, [items, analysis, plan])
+
+  useEffect(() => () => choreo.current.forEach(window.clearTimeout), [])
 
   // -- transcript helpers ---------------------------------------------------
 
@@ -180,6 +214,25 @@ export default function App() {
     setInput('')
     add({ kind: 'user', text })
 
+    if (phase === 'session') {
+      await runTurn(text)
+      return
+    }
+
+    // A typed reply during intake answers the open question.
+    if (phase === 'intake') {
+      const open = [...items]
+        .reverse()
+        .find((i): i is Extract<Item, { kind: 'ask' }> => i.kind === 'ask' && i.answered === null)
+      if (open) {
+        patch(open.id, { answered: text })
+        const qa = [...intakeQA, { question: open.step.question, answer: text }]
+        setIntakeQA(qa)
+        await advanceIntake(qa)
+      }
+      return
+    }
+
     if (phase === 'landing') {
       setPhase('coaching')
       const ok = await sendToCoach(text, true)
@@ -214,17 +267,74 @@ export default function App() {
 
     add({ kind: 'user', text: "No, I don't have one to share." })
     setPhase('intake')
-    const workingId = add({ kind: 'working', label: 'Thinking about what I need to ask you...' })
+    await advanceIntake([])
+  }
+
+  // -- path B: adaptive intake, one question at a time -----------------------
+
+  /**
+   * One tick of the intake loop: with everything known so far, either ask the
+   * single next question or build. Called with [] right after "no", and again
+   * after every answer.
+   */
+  const advanceIntake = async (qa: IntakeQA[]) => {
+    if (qa.length >= INTAKE_CAP) {
+      await buildFromScratch(qa)
+      return
+    }
+
+    const workingId = add({
+      kind: 'working',
+      label: qa.length === 0 ? 'Checking what I already know from our chat...' : 'Checking if I have enough...',
+    })
 
     try {
-      const result = await generateIntake(turns)
+      const step = await nextIntakeStep(turns, qa)
       drop(workingId)
-      setIntake(result)
-      add({ kind: 'intake' })
+      if (step.ready || !step.question.trim()) {
+        if (step.coach_line.trim()) add({ kind: 'coach', text: step.coach_line, streaming: false })
+        await buildFromScratch(qa)
+      } else {
+        add({ kind: 'ask', step, answered: null })
+      }
     } catch (err) {
       drop(workingId)
       fail(err)
-      setPhase('choosing')
+      if (qa.length === 0) setPhase('choosing')
+    }
+  }
+
+  const answerAsk = async (itemId: number, step: IntakeStep, answer: string) => {
+    patch(itemId, { answered: answer })
+    add({ kind: 'user', text: answer })
+    const qa = [...intakeQA, { question: step.question, answer }]
+    setIntakeQA(qa)
+    await advanceIntake(qa)
+  }
+
+  const skipAsk = async (itemId: number) => {
+    patch(itemId, { answered: '(skipped)' })
+    add({ kind: 'user', text: 'You decide — build it with what you have.' })
+    await buildFromScratch(intakeQA)
+  }
+
+  const buildFromScratch = async (qa: IntakeQA[]) => {
+    setPhase('building')
+    const workingId = add({ kind: 'working', label: BUILDING_STEPS[0] })
+
+    const ticker = advance(workingId, BUILDING_STEPS)
+
+    try {
+      const result = await buildPlanFromScratch(turns, qa)
+      setPlan(result)
+      add({ kind: 'plan' })
+      setPhase('done')
+    } catch (err) {
+      fail(err)
+      setPhase('intake')
+    } finally {
+      clearInterval(ticker)
+      drop(workingId)
     }
   }
 
@@ -239,8 +349,11 @@ export default function App() {
     try {
       const result = await analyzeLessonPlan(source)
       setAnalysis(result)
-      add({ kind: 'analysis' })
-      setPhase('training')
+      add({ kind: 'kickoff' })
+      setPhase('reviewing')
+      // The hidden target builds while she reads her diagnosis — by the time
+      // she is done, the Start button is usually live.
+      void buildTarget(result)
     } catch (err) {
       fail(err)
       setPhase('awaiting_plan')
@@ -250,64 +363,124 @@ export default function App() {
     }
   }
 
-  const handleRunPrompt = async (index: number, prompt: string) => {
-    setRuns((r) => ({ ...r, [index]: { text: '', running: true } }))
+  // -- the guided session ----------------------------------------------------
+
+  const buildTarget = async (a: Analysis) => {
+    setTarget({ status: 'building', plan: null })
     try {
-      const full = await runTrainingPrompt(prompt, (delta) => {
-        setRuns((r) => ({ ...r, [index]: { text: (r[index]?.text ?? '') + delta, running: true } }))
-      })
-      setRuns((r) => ({ ...r, [index]: { text: full, running: false } }))
-    } catch (err) {
-      setRuns((r) => {
-        const next = { ...r }
-        delete next[index]
-        return next
-      })
-      fail(err)
+      const result = await buildImprovedPlan(a)
+      setTarget({ status: 'ready', plan: result })
+    } catch {
+      setTarget({ status: 'failed', plan: null })
     }
   }
 
-  const handleBuildImproved = async () => {
-    if (!analysis) return
-    setPhase('building')
-    const workingId = add({ kind: 'working', label: BUILDING_STEPS[0] })
-
-    const ticker = advance(workingId, BUILDING_STEPS)
-
-    try {
-      const result = await buildImprovedPlan(analysis)
-      setPlan(result)
-      add({ kind: 'plan' })
-      setPhase('done')
-    } catch (err) {
-      fail(err)
-      setPhase('training')
-    } finally {
-      clearInterval(ticker)
-      drop(workingId)
-    }
+  /** Claw'd speaks and moves. Clears any queued choreography first. */
+  const say = (mood: BuddyMood, anchor: BuddyAnchor, message: string) => {
+    choreo.current.forEach(window.clearTimeout)
+    choreo.current = []
+    setBuddy({ mood, anchor, message })
   }
 
-  // -- path B: build from intake answers ------------------------------------
+  const sayAfter = (ms: number, mood: BuddyMood, anchor: BuddyAnchor, message: string) => {
+    choreo.current.push(window.setTimeout(() => setBuddy({ mood, anchor, message }), ms))
+  }
 
-  const handleIntakeSubmit = async (answers: Record<string, string>) => {
-    if (!intake) return
-    setPhase('building')
-    const workingId = add({ kind: 'working', label: BUILDING_STEPS[0] })
+  const startSession = () => {
+    if (!analysis || target.status !== 'ready' || !target.plan) return
+    setSession({
+      docA: analysis.document_markdown,
+      doc: analysis.document_markdown,
+      prevDoc: null,
+      targetMd: toMarkdown(target.plan),
+      rubric: buildRubric(analysis),
+      history: [],
+      lastTurnGated: false,
+      feedback: [],
+    })
+    setVersion(0)
+    setDocMinimized(false)
+    setPhase('session')
+    say(
+      'excited',
+      'composer',
+      "I'm Claw'd, your TA! That's your plan on the right — tell it what to change. Be specific and watch what happens.",
+    )
+  }
 
-    const ticker = advance(workingId, BUILDING_STEPS)
+  const runTurn = async (prompt: string) => {
+    if (!session) return
+    setSessionBusy(true)
+    say('thinking', 'divider', '')
 
     try {
-      const result = await buildPlanFromIntake(intake, answers)
-      setPlan(result)
-      add({ kind: 'plan' })
-      setPhase('done')
+      const turn = await runSessionTurn({
+        doc: session.doc,
+        targetMd: session.targetMd,
+        rubric: session.rubric,
+        history: session.history,
+        lastTurnGated: session.lastTurnGated,
+        userPrompt: prompt,
+      })
+
+      // Claw'd speaks only through his bubble — echoing it into the transcript
+      // read as a repeat. The model still sees it via session history.
+      const history: ChatTurn[] = [
+        ...session.history,
+        { role: 'user', content: prompt },
+        { role: 'assistant', content: turn.buddy_message },
+      ]
+      const feedback = [...session.feedback, { ...turn.prompt_feedback, prompt }]
+
+      if (turn.verdict === 'pass' && turn.updated_document.trim()) {
+        const satisfiedById = new Map(turn.rubric.map((r) => [r.id, r.satisfied]))
+        const rubric = session.rubric.map((r) => ({
+          ...r,
+          satisfied: satisfiedById.get(r.id) ?? r.satisfied,
+        }))
+        const gained = rubric.some((r, i) => r.satisfied && !session.rubric[i].satisfied)
+        const done = rubric.every((r) => r.satisfied)
+
+        setSession({
+          ...session,
+          doc: turn.updated_document,
+          prevDoc: session.doc,
+          rubric,
+          history,
+          lastTurnGated: false,
+          feedback,
+        })
+        setVersion((v) => v + 1)
+
+        if (done) {
+          say('celebrate', 'center-stage', turn.buddy_message)
+          choreo.current.push(
+            window.setTimeout(() => {
+              setPhase('session_done')
+              add({ kind: 'skills' })
+            }, 3200),
+          )
+        } else {
+          // Scuttle over to what just changed, then wander home. A flipped
+          // rubric item earns a hop to the progress bar on the way.
+          say(turn.buddy_mood, 'doc-change', turn.buddy_message)
+          if (gained) sayAfter(3000, 'excited', 'progress', turn.buddy_message)
+          sayAfter(gained ? 5600 : 4500, 'idle', 'composer', turn.buddy_message)
+        }
+      } else if (turn.verdict === 'gate') {
+        setSession({ ...session, history, lastTurnGated: true, feedback })
+        say('nudge', 'composer', turn.buddy_message)
+      } else {
+        // 'answer', or a pass that came back without a document — either way
+        // the doc is untouched and the bubble carries the reply.
+        setSession({ ...session, history, lastTurnGated: false, feedback })
+        say(turn.buddy_mood === 'celebrate' ? 'excited' : turn.buddy_mood, 'composer', turn.buddy_message)
+      }
     } catch (err) {
       fail(err)
-      setPhase('intake')
+      say('idle', 'composer', 'Hm, I dropped that one mid-scuttle. Send it again?')
     } finally {
-      clearInterval(ticker)
-      drop(workingId)
+      setSessionBusy(false)
     }
   }
 
@@ -334,9 +507,13 @@ export default function App() {
     setInput('')
     setAttachment(null)
     setAnalysis(null)
-    setRuns({})
-    setIntake(null)
+    setIntakeQA([])
     setPlan(null)
+    setTarget({ status: 'idle', plan: null })
+    setSession(null)
+    setVersion(0)
+    setSessionBusy(false)
+    say('idle', 'composer', '')
   }
 
   if (!signedIn) return <LoginGate onSignIn={() => setSignedIn(true)} />
@@ -405,11 +582,13 @@ export default function App() {
       ? attachment
         ? 'Add a note if you want, then hit enter'
         : 'Attach your lesson plan with the clip, or paste it here'
-      : phase === 'training'
-        ? 'Ask me anything about these moves...'
-        : phase === 'done'
-          ? 'What else do you want to work on?'
-          : 'Say more...'
+      : phase === 'session'
+        ? 'Tell your document what to change...'
+        : phase === 'intake'
+          ? 'Type your answer, or tap an option above...'
+          : phase === 'session_done' || phase === 'done'
+            ? 'What else do you want to work on?'
+            : 'Say more...'
 
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper">
@@ -431,6 +610,7 @@ export default function App() {
 
       <div className="flex flex-grow overflow-hidden relative">
         <div
+          data-buddy-anchor="divider"
           className={`flex flex-col h-full relative shrink-0 ${
             docOpen ? 'w-full md:w-2/5 md:border-r-2 md:border-ink md:border-dashed' : 'w-full'
           }`}
@@ -519,31 +699,42 @@ export default function App() {
                   </div>
                 )
 
-              case 'analysis':
+              case 'kickoff':
                 return analysis ? (
                   <div key={item.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <TrainingWorkspace
+                    <SessionKickoff
                       analysis={analysis}
-                      runs={runs}
-                      onRunPrompt={handleRunPrompt}
-                      onBuildImproved={handleBuildImproved}
-                      buildingPlan={phase === 'building'}
-                      planBuilt={Boolean(plan)}
+                      targetReady={target.status === 'ready'}
+                      targetFailed={target.status === 'failed'}
+                      onStart={startSession}
+                      onRetry={() => analysis && buildTarget(analysis)}
                     />
                   </div>
                 ) : null
 
-              case 'intake':
-                return intake ? (
+              case 'skills':
+                return session ? (
                   <div key={item.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <IntakePanel
-                      intake={intake}
-                      onSubmit={handleIntakeSubmit}
-                      submitting={phase === 'building'}
-                      locked={Boolean(plan)}
+                    <SkillReport
+                      records={session.feedback}
+                      rubric={session.rubric}
+                      doc={session.doc}
+                      filename={docName ?? 'lesson-plan.md'}
                     />
                   </div>
                 ) : null
+
+              case 'ask':
+                return (
+                  <AskCard
+                    key={item.id}
+                    step={item.step}
+                    answered={item.answered}
+                    onAnswer={(answer) => answerAsk(item.id, item.step, answer)}
+                    onSkip={() => skipAsk(item.id)}
+                    disabled={busy || Boolean(plan)}
+                  />
+                )
 
               case 'plan':
                 return plan ? (
@@ -583,10 +774,23 @@ export default function App() {
       />
         </div>
 
-        {docName && !docMinimized && (
-          <DocViewer filename={docName} onMinimize={() => setDocMinimized(true)} />
-        )}
+        {docName &&
+          !docMinimized &&
+          ((phase === 'session' || phase === 'session_done') && session ? (
+            <SessionDocPane
+              filename={docName}
+              doc={session.doc}
+              prevDoc={session.prevDoc}
+              version={version}
+              rubric={session.rubric}
+              onMinimize={() => setDocMinimized(true)}
+            />
+          ) : (
+            <DocViewer filename={docName} onMinimize={() => setDocMinimized(true)} />
+          ))}
         {docName && docMinimized && <DocViewerTab onRestore={() => setDocMinimized(false)} />}
+
+        {(phase === 'session' || phase === 'session_done') && session && <BuddyStage buddy={buddy} />}
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" />
@@ -639,6 +843,7 @@ function Composer({
 
         <form
           onSubmit={onSubmit}
+          data-buddy-anchor="composer"
           className="flex gap-2 p-2 bg-paper rough-border sketch-box-shadow-blue items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform"
         >
           {allowAttach && (

@@ -36,8 +36,13 @@ npm run dev     # restart this after editing .env.local — Vite reads it at sta
      she sees what it produces.
    - a **Rebuild my lesson** button that applies every move and returns the
      improved plan.
-4. **No** → Claude asks four questions that would change what the lesson looks
-   like, then builds a full lesson plan from her answers.
+4. **No** → adaptive intake: Claude checks what it already knows from the
+   conversation, then asks **one question at a time** (with tappable answer
+   chips) and stops the moment it has enough — zero questions if her opening
+   message was rich, hard cap of three. The one thing it never assumes is the
+   finish line: what students should be able to do when the bell rings. Every
+   question card has a "You decide — just build it" escape hatch. Then it
+   builds the full lesson plan.
 
 Both paths end on a downloadable lesson plan.
 

@@ -110,7 +110,7 @@ function slug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'lesson-plan'
 }
 
-function toMarkdown(plan: LessonPlan): string {
+export function toMarkdown(plan: LessonPlan): string {
   const list = (heading: string, items: string[]) =>
     items.length ? `## ${heading}\n${items.map((i) => `- ${i}`).join('\n')}\n` : ''
 

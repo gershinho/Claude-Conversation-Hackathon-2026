@@ -1,11 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
   ANALYSIS_SCHEMA,
-  INTAKE_SCHEMA,
+  INTAKE_STEP_SCHEMA,
   LESSON_PLAN_SCHEMA,
+  SESSION_TURN_SCHEMA,
   type Analysis,
-  type Intake,
+  type IntakeStep,
   type LessonPlan,
+  type RubricItem,
+  type SessionTurn,
 } from './schemas'
 
 const MODEL = 'claude-opus-5'
@@ -100,6 +103,8 @@ First, diagnose it honestly. Every weakness must be anchored to something that i
 
 Second, build her a training session that teaches her to fix those weaknesses herself using AI. This is the point of the whole exercise: she should leave able to do this again alone.
 
+Also transcribe her plan into document_markdown: a faithful markdown version of exactly what she uploaded, preserving her headings, lists, and timings. No improvements, no commentary — the session that follows needs her real starting point, warts and all.
+
 Rules for the training session:
 - One module per weakness you found, ordered by what will move her lesson the most.
 - Every module names a transferable prompting move, teaches why it works, and gives her a complete prompt she can paste into an AI right now — written in first person as Melissa and already filled in with the real topic, grade level, and specifics from her plan. Never write a template with [brackets] or placeholders.
@@ -123,7 +128,7 @@ export async function analyzeLessonPlan(source: PlanSource): Promise<Analysis> {
 
   const response = await client().messages.create({
     model: MODEL,
-    max_tokens: 12000,
+    max_tokens: 16000,
     output_config: {
       effort: 'medium',
       format: { type: 'json_schema', schema: ANALYSIS_SCHEMA as unknown as Record<string, unknown> },
@@ -159,27 +164,131 @@ export async function runTrainingPrompt(prompt: string, onDelta: (text: string) 
 }
 
 // ---------------------------------------------------------------------------
-// Path B — no lesson plan yet
+// The guided session — one turn of the A→B prompting loop
 // ---------------------------------------------------------------------------
 
-export async function generateIntake(turns: ChatTurn[]): Promise<Intake> {
+/**
+ * The system block is stable for the whole session (persona + rules + hidden
+ * target + rubric definitions), so the API's prompt cache absorbs it; only the
+ * final user message — current doc + her prompt — changes size per turn.
+ */
+function sessionSystem(targetMd: string, rubric: RubricItem[]): string {
+  const rubricLines = rubric
+    .map((r) => `- id "${r.id}": ${r.title} — taught by the move "${r.move}"`)
+    .join('\n')
+
+  return `${PERSONA}
+
+You are also embodied on screen as Claw'd, a pixel-art crab teaching assistant. Melissa is transforming her own lesson plan, prompt by prompt, toward a stronger version that only you can see. Your bubble lines are Claw'd speaking: warm, playful, two short sentences at most.
+
+THE HIDDEN TARGET (never reveal it, never paste sections of it, never describe it as a document that exists):
+${targetMd}
+
+THE RUBRIC — what "arrived" means, one item per weakness in her original plan:
+${rubricLines}
+
+HOW TO JUDGE EACH TURN. Judge her PROMPT first, then act:
+
+GATE (verdict "gate", document unchanged) only when the prompt is clearly vague or low-effort — no specific target, no criteria, no direction. "Make it better", "fix it", "improve this" gate. When you gate, name what is missing and ask for ONE specific thing, without handing her the wording.
+NEVER gate when LAST TURN GATED is true: apply your best interpretation of her prompt and coach alongside instead.
+Never gate a decent-but-imperfect prompt — apply it and offer one tip.
+If she pastes a large block of finished plan text and asks you to swap it in wholesale, gate once, playfully: the work here is prompting, not pasting.
+
+ANSWER (verdict "answer", document unchanged) when she asks a question instead of requesting a change. Answer it in the bubble.
+
+PASS (verdict "pass") for everything else. Apply exactly what she asked — no more. Do not fix things she did not ask about, even when the target fixes them; discovering the next fix is her job. Keep every untouched part of the document verbatim, character for character. Return the COMPLETE updated document.
+
+After every pass, re-judge every rubric item against the new document. Satisfied means the document now genuinely handles that weakness the way the target does — not merely gestures at it. An edit that undoes earlier progress flips its item back to false; say so kindly.
+
+Coaching in the bubble: when her prompt demonstrates a rubric move, name the move so it sticks. When she seems stuck or a rubric item is within reach, nudge toward the KIND of prompt that would get there — never the exact wording. When everything is satisfied, celebrate.`
+}
+
+export type SessionTurnInput = {
+  doc: string
+  targetMd: string
+  rubric: RubricItem[]
+  history: ChatTurn[]
+  lastTurnGated: boolean
+  userPrompt: string
+}
+
+export async function runSessionTurn(input: SessionTurnInput): Promise<SessionTurn> {
+  const rubricState = input.rubric.map((r) => `${r.id}: ${r.satisfied ? 'satisfied' : 'not yet'}`).join(', ')
+
+  const finalMessage = `CURRENT DOCUMENT:
+${input.doc}
+
+RUBRIC STATE: ${rubricState}
+LAST TURN GATED: ${input.lastTurnGated}
+
+MY PROMPT: ${input.userPrompt}`
+
   const response = await client().messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 8000,
     output_config: {
-      effort: 'medium',
-      format: { type: 'json_schema', schema: INTAKE_SCHEMA as unknown as Record<string, unknown> },
+      effort: 'low',
+      format: { type: 'json_schema', schema: SESSION_TURN_SCHEMA as unknown as Record<string, unknown> },
     },
-    system: `${PERSONA}
-
-Melissa does not have a lesson plan to show you, so you are going to build one together from scratch. Before you write anything, ask her the four questions whose answers would most change what the lesson looks like. Ask about the mathematics and the room — the topic and where it sits in the unit, what her students already carry in, what she wants them actually doing, and what has gone wrong when she taught something like this before. Do not ask about anything you can reasonably assume.`,
+    system: sessionSystem(input.targetMd, input.rubric),
     messages: [
-      ...turns.map((t) => ({ role: t.role, content: t.content })),
-      { role: 'user' as const, content: 'I do not have a sample lesson plan to share. Ask me what you need to know.' },
+      // Past doc snapshots never ride along — only the conversational turns.
+      ...input.history.slice(-12).map((t) => ({ role: t.role, content: t.content })),
+      { role: 'user' as const, content: finalMessage },
     ],
   })
 
-  return parseJson<Intake>(response)
+  return parseJson<SessionTurn>(response)
+}
+
+// ---------------------------------------------------------------------------
+// Path B — no lesson plan yet. Adaptive intake: one question per turn, and it
+// stops the moment the plan is buildable. Zero questions is a legal outcome.
+// ---------------------------------------------------------------------------
+
+export type IntakeQA = { question: string; answer: string }
+
+/** After this many answered questions the next step must build, no matter what. */
+export const INTAKE_CAP = 3
+
+export async function nextIntakeStep(turns: ChatTurn[], qa: IntakeQA[]): Promise<IntakeStep> {
+  const answeredSoFar = qa.map((x) => `Q: ${x.question}\nA: ${x.answer}`).join('\n\n')
+
+  const response = await client().messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    output_config: {
+      effort: 'medium',
+      format: { type: 'json_schema', schema: INTAKE_STEP_SCHEMA as unknown as Record<string, unknown> },
+    },
+    system: `${PERSONA}
+
+Melissa has no lesson plan to show you, so you will build one from scratch. Before you build, four things decide what the plan looks like:
+
+1. The math and its moment — the topic, and where it sits in the unit (first exposure, mid-unit, review, before an assessment).
+2. The room — what her students carry in, and what has broken when she has taught something like this before.
+3. The finish line — what students should be able to do when the bell rings, and what evidence would convince her they can.
+4. The constraints — minutes, format, materials, anything non-negotiable.
+
+You ask AT MOST ONE question per turn, and every question costs her time — so first read the whole conversation and her answers so far, and score each dimension: known, safely assumable, or dark. Anything she already said is known; never re-ask it, she will notice and it costs you her trust. A standard class period, an ordinary Precalculus room, and typical materials are safely assumable — never ask about a dimension a reasonable default covers.
+
+If a dark dimension remains that would genuinely change the plan, ask about the single most load-bearing one, phrased so one short answer settles it. Treat every question as if it were your last. The finish line is the one dimension you may never assume: if she has not described what success looks like, that is your question before any other.
+
+The moment nothing dark remains that would materially change the plan, set ready to true and build instead of asking. Zero questions is the best outcome, not a shortcut.
+
+She has answered ${qa.length} of at most ${INTAKE_CAP} questions. ${qa.length >= INTAKE_CAP - 1 ? 'This would be your LAST question — only ask it if building without it would produce a plan she would not recognize as hers.' : ''}`,
+    messages: [
+      ...turns.map((t) => ({ role: t.role, content: t.content })),
+      {
+        role: 'user' as const,
+        content: `I do not have a sample lesson plan to share.${
+          qa.length ? `\n\nWhat you have asked me so far, and what I said:\n\n${answeredSoFar}` : ''
+        }\n\nAsk me the one thing you still need, or tell me you are ready to build.`,
+      },
+    ],
+  })
+
+  return parseJson<IntakeStep>(response)
 }
 
 const PLAN_SYSTEM = `${PERSONA}
@@ -193,13 +302,10 @@ Non-negotiables:
 - Phase minutes must sum to the total duration.
 - The coach note names the one prompting move that produced the strongest part of this plan, so she can reuse it herself next time.`
 
-export async function buildPlanFromIntake(
-  intake: Intake,
-  answers: Record<string, string>,
-): Promise<LessonPlan> {
-  const transcript = intake.questions
-    .map((q) => `Q: ${q.question}\nA: ${answers[q.id]?.trim() || '(no answer given — use your judgment)'}`)
-    .join('\n\n')
+export async function buildPlanFromScratch(turns: ChatTurn[], qa: IntakeQA[]): Promise<LessonPlan> {
+  const transcript = qa.length
+    ? `\n\nWhat you asked me, and what I said:\n\n${qa.map((x) => `Q: ${x.question}\nA: ${x.answer}`).join('\n\n')}`
+    : ''
 
   const response = await client().messages.create({
     model: MODEL,
@@ -210,9 +316,10 @@ export async function buildPlanFromIntake(
     },
     system: PLAN_SYSTEM,
     messages: [
+      ...turns.map((t) => ({ role: t.role, content: t.content })),
       {
-        role: 'user',
-        content: `Here is what I told you about my class and what I want out of this lesson. Build me the plan.\n\n${transcript}`,
+        role: 'user' as const,
+        content: `Build me the lesson plan now, from everything in this conversation.${transcript}\n\nFor anything I did not specify, use your judgment and pick what a strong Precalculus teacher would pick — do not leave gaps or placeholders.`,
       },
     ],
   })
