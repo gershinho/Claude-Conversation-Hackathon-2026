@@ -1,4 +1,5 @@
 {
+  "title": "teach.ai",
   "description": "This web application offers a minimalist canvas for creative professionals to brainstorm and sketch ideas, featuring a unique rough aesthetic in black, white, and royal blue.",
   "robots": {
     "index": false

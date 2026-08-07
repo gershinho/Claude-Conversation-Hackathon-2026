@@ -2,21 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, Sparkles, ArrowRight, LayoutDashboard, User, 
   Settings, BrainCircuit, Hammer, Paperclip, FileText, 
-  CircleDashed, CheckCircle2, ChevronLeft, ArrowUpRight
+  CircleDashed, CheckCircle2, ChevronLeft, ArrowUpRight,
+  GraduationCap, Terminal, Rocket, Compass, Minimize2, Maximize2, File
 } from 'lucide-react';
 
 type Message = { role: 'user' | 'ai'; content: string; };
-type ViewState = 'onboarding' | 'dashboard' | 'build_chat';
+type ViewState = 'login' | 'onboarding' | 'dashboard' | 'build_chat';
 
 // Mock Data for the Dashboard
-const MOCK_SKILLS = ["React Novice", "UX Enthusiast", "Fearless Break-er", "Prompt Tinkerer"];
+const MOCK_RECOMMENDED_PROJECTS = [
+  { id: 101, title: "Lesson Plan Generator", description: "Create an AI tool to draft lesson plans based on standards." },
+  { id: 102, title: "Student Feedback Assistant", description: "Build an app that helps grade and provide constructive feedback." },
+  { id: 103, title: "Vocabulary Quiz Bot", description: "Design an interactive bot to quiz students on weekly words." }
+];
 const MOCK_TASKS = [
-  { id: 1, title: "Personal Portfolio V1", status: "Drafting layout", progress: 25 },
-  { id: 2, title: "Figma Plugin Prototype", status: "Stuck on API", progress: 60 },
+  { id: 1, title: "Syllabus Simplifier AI", status: "Drafting prompt", progress: 25 },
+  { id: 2, title: "Classroom Behavior Tracker", status: "Stuck on state", progress: 60 },
 ];
 
 export default function App() {
-  const [view, setView] = useState<ViewState>('onboarding');
+  const [view, setView] = useState<ViewState>('login');
+  
+  // Login State
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   
   // Onboarding Chat State
   const [onboardingInput, setOnboardingInput] = useState('');
@@ -32,6 +41,7 @@ export default function App() {
   const [buildInput, setBuildInput] = useState('');
   const [buildMessages, setBuildMessages] = useState<Message[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [isPdfMinimized, setIsPdfMinimized] = useState(false);
   const buildEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +62,7 @@ export default function App() {
     setTimeout(() => {
       setOnboardingMessages(prev => [
         ...prev,
-        { role: 'ai', content: "That's a really interesting direction! I can definitely help you with that. What's the biggest challenge you're facing with it right now?" }
+        { role: 'ai', content: "That's a wonderful goal for your classroom! I can definitely help you build that. What's the biggest challenge you're facing with getting started?" }
       ]);
       setIsOnboardingTyping(false);
     }, 1500);
@@ -61,7 +71,7 @@ export default function App() {
   const handleStartBuilding = (projectName: string) => {
     setActiveProject(projectName || "New Idea");
     setBuildMessages([
-      { role: 'ai', content: "Build it. (Make mistakes, run into walls, that's how we learn how to ride bikes, drive cars, it's how we learn AI)." }
+      { role: 'ai', content: "Let's build it for your students. (Make mistakes, run into walls—that's how we learn to teach, and it's how we learn AI)." }
     ]);
     setView('build_chat');
   };
@@ -80,7 +90,7 @@ export default function App() {
     setBuildInput('');
     setBuildMessages(prev => [...prev, { role: 'user', content: msg }]);
     setTimeout(() => {
-      setBuildMessages(prev => [...prev, { role: 'ai', content: "Let's wire that up. Have you tried looking at the documentation for that specific hook?" }]);
+      setBuildMessages(prev => [...prev, { role: 'ai', content: "Let's wire that up. Have you thought about how your students will interact with this part of the app?" }]);
     }, 1000);
   };
 
@@ -90,6 +100,76 @@ export default function App() {
       setUploadedFiles(prev => [...prev, ...fileNames]);
     }
   };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username.trim()) {
+      setView('onboarding');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // VIEW: LOGIN
+  // ---------------------------------------------------------------------------
+  if (view === 'login') {
+    return (
+      <div className="min-h-screen flex flex-col bg-paper text-ink selection:bg-royal selection:text-paper relative font-sans items-center justify-center p-4 overflow-hidden">
+        
+        {/* Background Graphics */}
+        <div className="absolute top-12 left-8 md:left-16 text-royal opacity-20 -rotate-12 pointer-events-none">
+          <GraduationCap size={64} strokeWidth={1.5} />
+        </div>
+        <div className="absolute bottom-16 right-8 md:right-16 text-ink opacity-10 rotate-12 pointer-events-none">
+          <Terminal size={80} strokeWidth={1} />
+        </div>
+        <div className="absolute top-32 right-12 md:right-32 text-royal opacity-15 rotate-45 pointer-events-none hidden md:block">
+          <Rocket size={48} strokeWidth={1.5} />
+        </div>
+        <div className="absolute bottom-32 left-12 md:left-24 text-ink opacity-10 -rotate-12 pointer-events-none hidden md:block">
+          <Compass size={56} strokeWidth={1.5} />
+        </div>
+
+        <div className="max-w-md w-full p-8 bg-paper rough-border sketch-box-shadow flex flex-col gap-8 z-10">
+          <div className="text-center flex flex-col gap-4">
+            <h1 className="text-5xl font-display text-ink -rotate-1">teach.ai</h1>
+            <p className="text-base font-sans opacity-80 leading-relaxed">
+              A space to learn by building. Make mistakes, run into walls, and create something real.
+            </p>
+          </div>
+          <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-bold text-sm">Username</label>
+              <input 
+                type="text" 
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Enter your username" 
+                className="w-full bg-transparent outline-none p-3 rough-border-blue font-sans focus-within:-translate-y-0.5 transition-transform"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="font-bold text-sm">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••" 
+                className="w-full bg-transparent outline-none p-3 rough-border font-sans focus-within:-translate-y-0.5 transition-transform"
+                required
+              />
+            </div>
+            <button 
+              type="submit"
+              className="mt-4 p-4 rough-button font-bold hover:bg-ink hover:text-paper transition-all"
+            >
+              Continue
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // VIEW: ONBOARDING
@@ -113,7 +193,7 @@ export default function App() {
         <main className="flex-grow flex flex-col items-center overflow-y-auto pt-12 pb-40 px-4 md:px-8 w-full scroll-smooth">
           <div className={`flex flex-col items-center text-center max-w-4xl w-full z-10 transition-all duration-1000 ease-in-out ${onboardingMessages.length === 0 ? 'my-auto scale-100 opacity-100' : 'mt-4 mb-16 scale-75 opacity-40 origin-top'}`}>
             <h1 className="text-6xl md:text-8xl lg:text-9xl font-display text-ink mb-12 -rotate-2">
-              who are <span className="text-royal scribble-underline">YOU?</span>
+              {username}, <span className="text-royal scribble-underline">who are you?</span>
             </h1>
             <p className="text-xl md:text-2xl font-sans opacity-80 leading-relaxed max-w-2xl mx-auto">
               what do you do, what are your goals, we will give you the space to learn ai while being <span className="font-display text-4xl text-royal ml-1 -rotate-3 inline-block">you.</span>
@@ -214,17 +294,27 @@ export default function App() {
         <main className="flex-grow overflow-y-auto p-6 md:p-8 scroll-smooth h-full">
           <div className="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
             
-            {/* Header & Skills */}
+            {/* Header & Recommended Projects */}
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h1 className="text-4xl md:text-5xl font-display mb-4 -rotate-1">
-                Your <span className="text-royal scribble-underline">Toolkit</span>
+              <h1 className="text-4xl md:text-5xl font-display mb-6 -rotate-1">
+                Let's <span className="text-royal scribble-underline">Build</span>
               </h1>
-              <p className="opacity-60 mb-4 font-mono text-sm uppercase tracking-wider">AI-Identified Core Skills</p>
-              <div className="flex flex-wrap gap-2">
-                {MOCK_SKILLS.map((skill, i) => (
-                  <span key={i} className="px-3 py-1.5 rough-border border-ink bg-transparent text-ink text-sm font-bold rotate-1 hover:-rotate-1 transition-transform cursor-default">
-                    {skill}
-                  </span>
+              <p className="opacity-60 mb-4 font-mono text-sm uppercase tracking-wider">Recommended Projects</p>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {MOCK_RECOMMENDED_PROJECTS.map((project, i) => (
+                  <div 
+                    key={project.id} 
+                    className={`p-4 md:p-5 rough-border bg-paper sketch-box-shadow flex flex-col justify-between transition-transform hover:translate-x-1 hover:-translate-y-1 cursor-pointer ${i % 2 === 0 ? 'rotate-1' : '-rotate-1'}`}
+                    onClick={() => handleStartBuilding(project.title)}
+                  >
+                    <div>
+                      <h3 className="font-bold mb-1 text-lg">{project.title}</h3>
+                      <p className="text-sm opacity-80 mb-4">{project.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-royal font-bold text-sm">
+                      Start Building <ArrowUpRight size={16} />
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
@@ -287,10 +377,12 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // VIEW: BUILD CHAT
   // ---------------------------------------------------------------------------
+  const hasUploadedFiles = uploadedFiles.length > 0;
+
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink selection:bg-royal selection:text-paper font-sans">
+    <div className="h-screen flex flex-col bg-paper text-ink selection:bg-royal selection:text-paper font-sans overflow-hidden">
       {/* Header */}
-      <header className="p-4 md:p-6 border-b-2 border-ink border-dashed flex items-center justify-between sticky top-0 bg-paper z-40">
+      <header className="p-4 md:p-6 border-b-2 border-ink border-dashed flex items-center justify-between sticky top-0 bg-paper z-40 shrink-0">
         <button 
           onClick={() => setView('dashboard')}
           className="flex items-center gap-2 font-bold hover:text-royal transition-colors"
@@ -302,72 +394,126 @@ export default function App() {
         </div>
       </header>
 
-      {/* Chat Area */}
-      <main className="flex-grow flex flex-col overflow-y-auto p-4 md:p-8 scroll-smooth pb-48">
-        <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto">
-          {buildMessages.map((msg, idx) => (
-            <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-5 md:p-6 max-w-[85%] md:max-w-[75%] leading-relaxed text-lg animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'bg-royal text-paper rough-border-blue' : 'bg-paper text-ink rough-border sketch-box-shadow'}`}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-          <div ref={buildEndRef} className="h-4" />
-        </div>
-      </main>
-
-      {/* Input Area (Bottom Fixed) */}
-      <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
-        <div className="max-w-4xl mx-auto flex flex-col gap-2">
-          
-          {/* Uploaded Files Bar */}
-          {uploadedFiles.length > 0 && (
-            <div className="flex gap-2 flex-wrap mb-2 animate-in fade-in slide-in-from-bottom-2">
-              {uploadedFiles.map((file, i) => (
-                <div key={i} className="px-3 py-1 bg-ink text-paper text-sm font-mono rough-border flex items-center gap-2">
-                  <FileText size={14} /> {file}
+      <div className="flex flex-grow overflow-hidden relative">
+        {/* Left Side: Chat Area */}
+        <div className={`flex flex-col h-full relative shrink-0 ${hasUploadedFiles && !isPdfMinimized ? 'w-2/5 border-r-2 border-ink border-dashed' : 'w-full'}`}>
+          <main className="flex-grow overflow-y-auto p-4 md:p-8 scroll-smooth pb-48">
+            <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto">
+              {buildMessages.map((msg, idx) => (
+                <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`p-5 md:p-6 max-w-[85%] md:max-w-[75%] leading-relaxed text-lg animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'bg-royal text-paper rough-border-blue' : 'bg-paper text-ink rough-border sketch-box-shadow'}`}>
+                    {msg.content}
+                  </div>
                 </div>
               ))}
+              <div ref={buildEndRef} className="h-4" />
             </div>
-          )}
+          </main>
 
-          <form onSubmit={handleBuildSubmit} className="flex gap-2 sm:gap-4 p-2 bg-paper rough-border sketch-box-shadow items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform relative">
-            
-            {/* File Upload Button */}
-            <input 
-              type="file" 
-              multiple 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-            />
-            <button 
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-4 text-ink hover:text-royal transition-colors shrink-0"
-              title="Upload files"
-            >
-              <Paperclip size={24} />
-            </button>
+          {/* Input Area (Bottom Fixed relative to chat panel) */}
+          <div className="absolute bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
+            <div className="max-w-4xl mx-auto flex flex-col gap-2">
+              
+              {/* Uploaded Files Bar */}
+              {uploadedFiles.length > 0 && (
+                <div className="flex gap-2 flex-wrap mb-2 animate-in fade-in slide-in-from-bottom-2">
+                  {uploadedFiles.map((file, i) => (
+                    <div key={i} className="px-3 py-1 bg-ink text-paper text-sm font-mono rough-border flex items-center gap-2">
+                      <FileText size={14} /> {file}
+                    </div>
+                  ))}
+                </div>
+              )}
 
-            <input 
-              type="text" 
-              value={buildInput}
-              onChange={e => setBuildInput(e.target.value)}
-              placeholder="What are we doing next?" 
-              className="flex-grow bg-transparent outline-none py-4 font-sans text-lg placeholder-ink placeholder-opacity-40"
-              autoFocus
-            />
-            
-            <button 
-              type="submit"
-              disabled={!buildInput.trim()}
-              className="p-4 md:px-8 rough-button font-bold flex items-center justify-center gap-2 hover:bg-ink hover:text-paper transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="hidden sm:inline">Send</span><Send size={20} className="sm:ml-2" />
-            </button>
-          </form>
+              <form onSubmit={handleBuildSubmit} className="flex gap-2 sm:gap-4 p-2 bg-paper rough-border sketch-box-shadow items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform relative">
+                
+                {/* File Upload Button */}
+                <input 
+                  type="file" 
+                  multiple 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                />
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-4 text-ink hover:text-royal transition-colors shrink-0"
+                  title="Upload files"
+                >
+                  <Paperclip size={24} />
+                </button>
+
+                <input 
+                  type="text" 
+                  value={buildInput}
+                  onChange={e => setBuildInput(e.target.value)}
+                  placeholder="What are we doing next?" 
+                  className="flex-grow bg-transparent outline-none py-4 font-sans text-lg placeholder-ink placeholder-opacity-40"
+                  autoFocus
+                />
+                
+                <button 
+                  type="submit"
+                  disabled={!buildInput.trim()}
+                  className="p-4 md:px-8 rough-button font-bold flex items-center justify-center gap-2 hover:bg-ink hover:text-paper transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="hidden sm:inline">Send</span><Send size={20} className="sm:ml-2" />
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
+
+        {/* Right Side: PDF Viewer */}
+        <div className={`h-full bg-ink text-paper flex flex-col shrink-0 ${hasUploadedFiles && !isPdfMinimized ? 'w-3/5' : 'hidden'}`}>
+          <div className="p-4 border-b-2 border-paper flex items-center justify-between shrink-0">
+            <div className="font-bold flex items-center gap-2">
+              <FileText size={18} /> Document Viewer
+            </div>
+            <button 
+              onClick={() => setIsPdfMinimized(true)}
+              className="hover:text-royal transition-colors bg-paper text-ink p-1 rounded"
+              title="Minimize PDF"
+            >
+              <Minimize2 size={18} />
+            </button>
+          </div>
+          
+          <div className="flex-grow p-4 md:p-8 overflow-y-auto flex flex-col items-center justify-center opacity-70">
+            <File size={64} className="mb-6 opacity-50" />
+            <p className="font-mono text-center mb-2 uppercase tracking-widest text-sm">Now Viewing</p>
+            <p className="font-bold text-center text-2xl text-royal font-display rotate-1 mb-8">
+              {uploadedFiles[uploadedFiles.length - 1]}
+            </p>
+            
+            {/* Fake PDF Content Placeholder */}
+            <div className="w-full max-w-sm mt-4 p-8 bg-paper text-ink bg-opacity-10 rough-border border-paper flex flex-col gap-6 shadow-2xl">
+                <div className="w-1/2 h-8 bg-paper bg-opacity-20 mb-4"></div>
+                <div className="w-full h-4 bg-paper bg-opacity-20"></div>
+                <div className="w-full h-4 bg-paper bg-opacity-20"></div>
+                <div className="w-full h-4 bg-paper bg-opacity-20"></div>
+                <div className="w-5/6 h-4 bg-paper bg-opacity-20"></div>
+                
+                <div className="w-3/4 h-6 bg-paper bg-opacity-20 mt-4 mb-2"></div>
+                <div className="w-full h-4 bg-paper bg-opacity-20"></div>
+                <div className="w-11/12 h-4 bg-paper bg-opacity-20"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Minimized Tab */}
+        {hasUploadedFiles && isPdfMinimized && (
+          <button 
+            onClick={() => setIsPdfMinimized(false)}
+            className="absolute top-1/2 right-0 -translate-y-1/2 bg-ink text-paper py-6 px-3 hover:text-royal transition-colors border-y-2 border-l-2 border-paper z-50 flex flex-col items-center gap-3 font-bold shadow-lg"
+          >
+            <Maximize2 size={18} />
+            <span style={{ writingMode: 'vertical-rl' }} className="rotate-180 tracking-widest">
+              VIEW DOC
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );
