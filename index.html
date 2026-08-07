@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Teaching with AI · Term 2 · Teach AI</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Teach AI — Teacher Progress Report
+   A report, not a dashboard. Editorial rhythm, evidence beside
+   every claim, correlation stated plainly.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --paper:      #FBFAF7;
+  --surface:    #FFFFFF;
+  --surface-2:  #F4F2ED;
+  --ink:        #1A1815;
+  --ink-2:      #4A453E;
+  --muted:      #7A736A;
+  --faint:      #A9A299;
+  --rule:       #E4DFD6;
+  --rule-2:     #EFEBE3;
+  --accent:     #B4541E;
+  --accent-sub: #F0E2D6;
+  --pos:        #3F7A4D;
+  --pos-sub:    #DFEBE0;
+  --shadow:     0 1px 2px rgba(26,24,21,.04), 0 8px 24px -12px rgba(26,24,21,.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:      #131210;
+    --surface:    #1B1A16;
+    --surface-2:  #22201B;
+    --ink:        #EEEAE2;
+    --ink-2:      #C4BDB2;
+    --muted:      #948D83;
+    --faint:      #6B655C;
+    --rule:       #2E2B25;
+    --rule-2:     #262420;
+    --accent:     #E0834A;
+    --accent-sub: #3A281C;
+    --pos:        #79B487;
+    --pos-sub:    #22301F;
+    --shadow:     0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.55);
+  }
+}
+
+:root[data-theme="light"] {
+  --paper:#FBFAF7; --surface:#FFFFFF; --surface-2:#F4F2ED;
+  --ink:#1A1815; --ink-2:#4A453E; --muted:#7A736A; --faint:#A9A299;
+  --rule:#E4DFD6; --rule-2:#EFEBE3;
+  --accent:#B4541E; --accent-sub:#F0E2D6; --pos:#3F7A4D; --pos-sub:#DFEBE0;
+  --shadow: 0 1px 2px rgba(26,24,21,.04), 0 8px 24px -12px rgba(26,24,21,.10);
+}
+:root[data-theme="dark"] {
+  --paper:#131210; --surface:#1B1A16; --surface-2:#22201B;
+  --ink:#EEEAE2; --ink-2:#C4BDB2; --muted:#948D83; --faint:#6B655C;
+  --rule:#2E2B25; --rule-2:#262420;
+  --accent:#E0834A; --accent-sub:#3A281C; --pos:#79B487; --pos-sub:#22301F;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.55);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.wrap  { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+.col   { max-width: 780px; }
+.report { padding-bottom: 96px; }
+
+/* ── Type primitives ────────────────────────────────────── */
+.eyebrow {
+  font-size: 11px; font-weight: 620; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted); margin: 0;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: -.021em; margin: 0; }
+
+/* ── Top bar ────────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px; padding: 28px 0 0;
+}
+
+/* ── Profile ────────────────────────────────────────────── */
+.profile {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 26px; align-items: center;
+  margin-top: 34px; padding: 22px 26px;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 14px; box-shadow: var(--shadow);
+}
+.avatar {
+  width: 82px; height: 82px; border-radius: 999px; overflow: hidden;
+  flex: none; border: 1px solid var(--rule);
+}
+.avatar svg { display: block; width: 100%; height: 100%; }
+.profile-name { font-size: 26px; letter-spacing: -.028em; line-height: 1.15; }
+.profile-role { margin: 5px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.profile-meta {
+  list-style: none; display: flex; flex-wrap: wrap; margin: 13px 0 0; padding: 0;
+  font-size: 12.5px; color: var(--faint);
+}
+.profile-meta li { display: flex; align-items: center; }
+.profile-meta li + li::before {
+  content: ""; width: 3px; height: 3px; border-radius: 999px;
+  background: var(--rule); margin: 0 10px; flex: none;
+}
+.profile-badge {
+  align-self: stretch; padding-left: 26px; border-left: 1px solid var(--rule-2);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 3px; text-align: right; white-space: nowrap;
+}
+.pb-k {
+  font-size: 11px; font-weight: 640; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.pb-v { font-size: 17px; font-weight: 600; letter-spacing: -.02em; color: var(--accent); }
+.pb-n { font-size: 12px; color: var(--faint); }
+
+/* ── Masthead ───────────────────────────────────────────── */
+.masthead {
+  border-bottom: 1px solid var(--ink);
+  padding: 46px 0 26px;
+}
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo-mark {
+  width: 22px; height: 22px; border-radius: 5px;
+  background: var(--accent); position: relative; flex: none;
+}
+.logo-mark::after {
+  content: ""; position: absolute; inset: 6px 6px auto 6px; height: 2px;
+  background: var(--paper); border-radius: 1px;
+  box-shadow: 0 4px 0 var(--paper), 0 8px 0 var(--paper);
+}
+.logo-text { font-size: 14px; font-weight: 640; letter-spacing: -.01em; }
+.logo-text span { color: var(--accent); }
+
+.theme-btn {
+  font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+  background: none; border: 1px solid var(--rule); border-radius: 999px;
+  padding: 5px 13px; cursor: pointer; transition: .18s;
+}
+.theme-btn:hover { color: var(--ink); border-color: var(--faint); }
+
+h1.title {
+  font-size: clamp(38px, 6.2vw, 62px);
+  line-height: 1.02; letter-spacing: -.035em; margin: 0 0 22px;
+  max-width: 15ch;
+}
+.mast-meta {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 28px; flex-wrap: wrap;
+}
+.mast-tag { font-size: 13.5px; color: var(--faint); letter-spacing: -.005em; }
+
+.termnav { display: flex; align-items: center; gap: 4px; font-size: 12.5px; }
+.termnav a, .termnav span {
+  padding: 5px 12px; border-radius: 999px; text-decoration: none;
+  color: var(--faint); white-space: nowrap;
+}
+.termnav a:hover { color: var(--ink); background: var(--surface-2); }
+.termnav .current {
+  color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+  font-weight: 560; box-shadow: var(--shadow);
+}
+
+/* ── Lede ───────────────────────────────────────────────── */
+.lede { padding: 52px 0 8px; }
+.lede p {
+  font-size: 21px; line-height: 1.55; letter-spacing: -.014em;
+  color: var(--ink-2); margin: 0; max-width: 34em;
+}
+.lede p em { font-style: normal; color: var(--ink); font-weight: 560; }
+
+.figures {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+  margin: 44px 0 0; border-radius: 10px; overflow: hidden;
+}
+.fig { background: var(--paper); padding: 20px 22px; }
+.fig .v {
+  font-size: 30px; font-weight: 600; letter-spacing: -.03em;
+  line-height: 1.1; display: block;
+}
+.fig .k {
+  font-size: 12px; color: var(--muted); margin-top: 4px; display: block;
+  letter-spacing: -.005em;
+}
+
+/* ── Section scaffolding ────────────────────────────────── */
+.part { padding-top: 88px; }
+.part-head {
+  display: flex; gap: 20px; align-items: baseline;
+  border-top: 1px solid var(--ink); padding-top: 18px; margin-bottom: 34px;
+}
+.part-num {
+  font-size: 12px; font-weight: 640; letter-spacing: .1em;
+  color: var(--accent); flex: none; padding-top: 6px;
+}
+.part-title { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.028em; line-height: 1.12; }
+.part-sub {
+  font-size: 14.5px; color: var(--muted); margin: 7px 0 0; max-width: 52ch;
+  letter-spacing: -.005em;
+}
+
+h3.block {
+  font-size: 12px; font-weight: 640; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+  padding-bottom: 11px; border-bottom: 1px solid var(--rule);
+  margin: 56px 0 24px;
+}
+
+/* ── Card ───────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.card-pad { padding: 26px 28px; }
+
+/* ── Level transition ───────────────────────────────────── */
+.level {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 22px 26px; margin-bottom: 34px;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent); border-radius: 10px;
+}
+.level-from, .level-to { display: flex; flex-direction: column; gap: 2px; }
+.level-from .n, .level-to .n {
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 640; color: var(--muted);
+}
+.level-from .l { font-size: 19px; color: var(--faint); letter-spacing: -.02em; }
+.level-to   .l { font-size: 19px; color: var(--ink); font-weight: 600; letter-spacing: -.02em; }
+.level-arrow { color: var(--accent); font-size: 18px; padding: 0 2px; }
+.level-note {
+  margin-left: auto; font-size: 13.5px; color: var(--muted);
+  max-width: 30ch; line-height: 1.45;
+}
+
+/* ── Skill bars (0–100, before→gain) ────────────────────── */
+.bars { display: flex; flex-direction: column; }
+.bar-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0,1fr) 92px;
+  align-items: center; gap: 20px;
+  padding: 15px 0; border-bottom: 1px solid var(--rule-2);
+}
+.bar-row:last-child { border-bottom: 0; }
+.bar-name { font-size: 14.5px; color: var(--ink); letter-spacing: -.008em; }
+.bar-name .flag {
+  display: block; font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); font-weight: 640; margin-top: 2px;
+}
+.track {
+  height: 9px; background: var(--surface-2); border-radius: 999px;
+  display: flex; overflow: hidden;
+}
+.seg-before { background: var(--faint); height: 100%; }
+.seg-gain   { background: var(--accent); height: 100%; }
+.bar-val {
+  font-size: 14px; text-align: right; color: var(--muted);
+  letter-spacing: -.01em; white-space: nowrap;
+}
+.bar-val b { color: var(--ink); font-weight: 600; }
+.bar-val .to { color: var(--faint); margin: 0 3px; }
+
+.legend {
+  display: flex; gap: 20px; font-size: 12px; color: var(--muted);
+  margin-top: 20px; align-items: center; flex-wrap: wrap;
+}
+.legend i { width: 18px; height: 8px; border-radius: 999px; display: inline-block; margin-right: 7px; vertical-align: -1px; }
+
+/* ── Prompt then/now ────────────────────────────────────── */
+.prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.prompt { display: flex; flex-direction: column; }
+.prompt-when {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+}
+.prompt-when .d {
+  font-size: 12px; font-weight: 640; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink);
+}
+.prompt-when .w { font-size: 12.5px; color: var(--muted); }
+.quote {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 22px 24px; flex: 1;
+  font-size: 16px; line-height: 1.62; color: var(--ink);
+  letter-spacing: -.008em; box-shadow: var(--shadow);
+}
+.prompt.now .quote { border-color: var(--accent); }
+.marks { list-style: none; margin: 16px 0 0; padding: 0; }
+.marks li {
+  display: flex; gap: 10px; font-size: 13.5px; line-height: 1.5;
+  color: var(--muted); padding: 4px 0;
+}
+.marks .m { flex: none; width: 14px; font-weight: 700; text-align: center; }
+.marks .miss .m { color: var(--faint); }
+.marks .has  { color: var(--ink-2); }
+.marks .has .m { color: var(--pos); }
+
+/* ── Cohort context ─────────────────────────────────────── */
+.cohort { display: grid; grid-template-columns: 1.15fr 1fr; gap: 32px; align-items: center; }
+.cohort p { margin: 0; font-size: 16.5px; line-height: 1.55; color: var(--ink-2); letter-spacing: -.01em; }
+.cohort p b { color: var(--ink); font-weight: 600; }
+.crow { display: grid; grid-template-columns: 74px 1fr 46px; gap: 14px; align-items: center; padding: 7px 0; }
+.crow .cl { font-size: 13px; color: var(--muted); }
+.crow .cb { height: 12px; border-radius: 3px; }
+.crow .cv { font-size: 13.5px; text-align: right; letter-spacing: -.01em; }
+.crow.you .cl, .crow.you .cv { color: var(--ink); font-weight: 600; }
+.crow.you .cb { background: var(--accent); }
+.crow.typ .cb { background: var(--rule); }
+.crow.typ .cv { color: var(--faint); }
+.no-rank {
+  font-size: 12.5px; color: var(--faint); margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid var(--rule-2);
+}
+
+/* ── Session ledger ─────────────────────────────────────── */
+.ledger { border-top: 1px solid var(--rule); }
+.sess {
+  display: grid; grid-template-columns: 96px 1fr auto;
+  gap: 28px; align-items: start;
+  padding: 22px 4px; border-bottom: 1px solid var(--rule);
+  transition: background .16s;
+}
+.sess:hover { background: var(--surface-2); }
+.sess-date {
+  font-size: 12px; font-weight: 640; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); padding-top: 3px;
+}
+.sess-topic { font-size: 17px; letter-spacing: -.018em; color: var(--ink); line-height: 1.35; }
+.sess-moved { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.chip {
+  font-size: 12.5px; padding: 3px 10px; border-radius: 999px;
+  background: var(--pos-sub); color: var(--pos); font-weight: 560;
+  letter-spacing: -.005em; white-space: nowrap;
+}
+.chip.base { background: var(--surface-2); color: var(--muted); font-weight: 500; }
+.sess-stats {
+  font-size: 12.5px; color: var(--faint); text-align: right;
+  white-space: nowrap; padding-top: 4px; letter-spacing: -.005em;
+}
+.ledger-more {
+  padding: 18px 4px; font-size: 13.5px; color: var(--muted);
+  display: flex; align-items: center; gap: 10px;
+}
+.ledger-more::before {
+  content: ""; width: 18px; height: 1px; background: var(--rule); flex: none;
+}
+
+/* ── Craft skill rows ───────────────────────────────────── */
+.craft { border-top: 1px solid var(--ink); }
+.craft-row {
+  display: grid; grid-template-columns: 200px 1fr 118px 104px;
+  gap: 24px; align-items: center;
+  padding: 19px 4px; border-bottom: 1px solid var(--rule);
+}
+.craft-name { font-size: 17px; letter-spacing: -.018em; }
+.craft-val { font-size: 15px; text-align: right; letter-spacing: -.012em; color: var(--muted); }
+.craft-val b { color: var(--ink); font-weight: 600; font-size: 17px; }
+.craft-delta {
+  font-size: 14.5px; text-align: right; font-weight: 600;
+  color: var(--pos); letter-spacing: -.012em;
+}
+.craft-count { font-size: 12.5px; color: var(--faint); text-align: right; }
+.craft-row.empty .craft-name { color: var(--faint); }
+.craft-row.empty .track { opacity: .5; }
+.empty-note {
+  grid-column: 2 / -1; font-size: 13.5px; color: var(--faint);
+  font-style: italic;
+}
+
+/* ── Timeline ───────────────────────────────────────────── */
+.chart-wrap {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 12px; padding: 28px 20px 20px; box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+.chart-wrap svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; flex-wrap: wrap; margin-bottom: 4px; padding: 0 8px; }
+.chart-head .t { font-size: 15px; font-weight: 600; letter-spacing: -.015em; }
+.chart-head .l { font-size: 12.5px; color: var(--muted); }
+.chart-head .l i { width: 9px; height: 9px; border-radius: 999px; display: inline-block; margin: 0 6px 0 16px; vertical-align: 0; }
+
+.caveat {
+  display: flex; gap: 14px; align-items: flex-start;
+  margin-top: 20px; padding: 16px 20px;
+  background: var(--surface-2); border-radius: 10px;
+  font-size: 13.5px; line-height: 1.55; color: var(--ink-2);
+  letter-spacing: -.005em;
+}
+.caveat .ic {
+  flex: none; width: 18px; height: 18px; border-radius: 999px;
+  border: 1.5px solid var(--faint); color: var(--faint);
+  font-size: 11px; font-weight: 700; line-height: 15px; text-align: center;
+  margin-top: 1px;
+}
+
+/* ── Rubric + evidence ──────────────────────────────────── */
+.deep { display: grid; grid-template-columns: 1.05fr .95fr; gap: 0; }
+.deep > div { padding: 28px 30px; }
+.deep .rub { border-right: 1px solid var(--rule); }
+.deep-h {
+  font-size: 12px; font-weight: 640; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+}
+.rrow {
+  display: grid; grid-template-columns: 1fr 96px;
+  gap: 16px; align-items: center; padding: 11px 0;
+  border-bottom: 1px solid var(--rule-2);
+}
+.rrow:last-child { border-bottom: 0; }
+.rrow .rn { font-size: 14px; color: var(--ink-2); letter-spacing: -.008em; }
+.rdots { display: flex; gap: 3px; margin-top: 6px; }
+.rdots span { height: 5px; flex: 1; border-radius: 999px; background: var(--surface-2); }
+.rdots span.f { background: var(--faint); }
+.rdots span.g { background: var(--accent); }
+.rrow .rv { font-size: 13.5px; text-align: right; color: var(--muted); letter-spacing: -.01em; white-space: nowrap; }
+.rrow .rv b { color: var(--ink); font-weight: 600; }
+.rrow .rv .to { color: var(--faint); margin: 0 2px; }
+
+.ev { list-style: none; margin: 0; padding: 0; }
+.ev li { padding: 13px 0; border-bottom: 1px solid var(--rule-2); }
+.ev li:last-child { border-bottom: 0; }
+.ev .et { font-size: 14px; color: var(--ink); letter-spacing: -.008em; }
+.ev .en {
+  font-size: 13.5px; color: var(--muted); margin-top: 4px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.ev .en .b { color: var(--faint); }
+.ev .en .arw { color: var(--faint); }
+.ev .en .a { color: var(--pos); font-weight: 600; }
+
+/* ── Reveal ─────────────────────────────────────────────── */
+.rv-in { opacity: 0; transform: translateY(14px); }
+.rv-in.on { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.22,.7,.3,1); }
+@media (prefers-reduced-motion: reduce) {
+  .rv-in, .rv-in.on { opacity: 1; transform: none; transition: none; }
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .wrap { padding: 0 22px; }
+  .figures { grid-template-columns: 1fr 1fr; }
+  .prompts { grid-template-columns: 1fr; }
+  .cohort { grid-template-columns: 1fr; gap: 24px; }
+  .deep { grid-template-columns: 1fr; }
+  .deep .rub { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .craft-row { grid-template-columns: 1fr 100px 88px; }
+  .craft-row .track { display: none; }
+  .profile { grid-template-columns: auto 1fr; row-gap: 20px; }
+  .profile-badge {
+    grid-column: 1 / -1; padding-left: 0; padding-top: 18px;
+    border-left: 0; border-top: 1px solid var(--rule-2); text-align: left;
+  }
+}
+@media (max-width: 620px) {
+  .bar-row { grid-template-columns: 1fr 84px; row-gap: 8px; }
+  .bar-row .track { grid-column: 1 / -1; }
+  .sess { grid-template-columns: 1fr; gap: 8px; }
+  .sess-stats { text-align: left; padding-top: 2px; }
+  .level-note { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap report">
+
+  <!-- ══ MASTHEAD ══════════════════════════════════════ -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true"></div>
+      <div class="logo-text">Teach<span>AI</span></div>
+    </div>
+    <button class="theme-btn" id="theme" type="button">Theme</button>
+  </div>
+
+  <!-- ══ PROFILE ═══════════════════════════════════════ -->
+  <section class="profile" aria-label="Your profile">
+    <div class="avatar">
+      <svg viewBox="0 0 100 100" role="img" aria-label="Melissa Turner">
+        <defs>
+          <clipPath id="avclip"><circle cx="50" cy="50" r="50"/></clipPath>
+        </defs>
+        <g clip-path="url(#avclip)">
+          <rect width="100" height="100" fill="#EFE2D4"/>
+          <!-- shoulders -->
+          <path d="M50 69C28 69 15 83 13 102h74C85 83 72 69 50 69Z" fill="#3E6B63"/>
+          <!-- collar -->
+          <path d="M43 70 50 81 57 70 53 67h-6Z" fill="#EFE2D4"/>
+          <!-- neck -->
+          <path d="M43 57h14v13q-7 6-14 0Z" fill="#D6A07A"/>
+          <!-- face -->
+          <ellipse cx="50" cy="45" rx="15.5" ry="18.5" fill="#E9BB98"/>
+          <!-- hair -->
+          <path d="M50 24c-13 0-19 9-19 21 0 9 1 15 3 18-1-7-1-14 0-18 6 3 26 3 32 0 1 4 1 11 0 18 2-3 3-9 3-18 0-12-6-21-19-21Z" fill="#4B382A"/>
+          <!-- eyes -->
+          <circle cx="43.6" cy="44.5" r="1.8" fill="#39291D"/>
+          <circle cx="56.4" cy="44.5" r="1.8" fill="#39291D"/>
+          <!-- smile -->
+          <path d="M45.4 52.6q4.6 3.8 9.2 0" stroke="#B07E58" stroke-width="1.7"
+                fill="none" stroke-linecap="round"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="profile-id">
+      <h2 class="profile-name">Melissa Turner</h2>
+      <p class="profile-role">Grade 3 teacher · Northbrook Elementary</p>
+      <ul class="profile-meta num">
+        <li>24 students</li>
+        <li>6th year teaching</li>
+        <li>Maths, reading &amp; science</li>
+        <li>On Teach AI since Sept 2025</li>
+      </ul>
+    </div>
+
+    <div class="profile-badge">
+      <span class="pb-k">Current level</span>
+      <span class="pb-v">3 · Practitioner</span>
+      <span class="pb-n num">reached 4 Apr</span>
+    </div>
+  </section>
+
+  <!-- ══ MASTHEAD ══════════════════════════════════════ -->
+  <header class="masthead">
+    <p class="eyebrow">Progress report</p>
+    <h1 class="title">Your teaching with AI</h1>
+
+    <div class="mast-meta">
+      <div class="mast-tag num">Prepared 15 May 2026 · covers 14 weeks</div>
+      <nav class="termnav" aria-label="Term">
+        <a href="#">◂ Term 1</a>
+        <span class="current num">Term 2 · Jan – May 2026</span>
+        <a href="#">Term 3 ▸</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ══ LEDE ══════════════════════════════════════════ -->
+  <section class="lede col rv-in">
+    <p>
+      This term you had <em>seven conversations</em> with your buddy and wrote
+      <em>26 pieces of classroom material</em> inside Teach AI. This report reads both:
+      what changed in <em>how you work with AI</em>, and what changed in
+      <em>the work itself</em>.
+    </p>
+
+    <div class="figures num">
+      <div class="fig"><span class="v">7</span><span class="k">buddy sessions</span></div>
+      <div class="fig"><span class="v">51</span><span class="k">prompts written</span></div>
+      <div class="fig"><span class="v">26</span><span class="k">artifacts authored</span></div>
+      <div class="fig"><span class="v">4h 12m</span><span class="k">time in sessions</span></div>
+    </div>
+  </section>
+
+  <!-- ══ PART 01 ═══════════════════════════════════════ -->
+  <section class="part">
+    <div class="part-head">
+      <div class="part-num num">01</div>
+      <div>
+        <h2 class="part-title">How you work with AI</h2>
+        <p class="part-sub">
+          Read from the 51 prompts you wrote to your buddy this term — how you framed
+          them, how you followed up, and what you did with the answers.
+        </p>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="level rv-in">
+        <div class="level-from">
+          <span class="n">Was</span>
+          <span class="l">Level 2 · Explorer</span>
+        </div>
+        <span class="level-arrow" aria-hidden="true">→</span>
+        <div class="level-to">
+          <span class="n">Now</span>
+          <span class="l">Level 3 · Practitioner</span>
+        </div>
+        <p class="level-note">
+          You crossed in early April, on the strength of context-setting.
+        </p>
+      </div>
+
+      <div class="bars rv-in num">
+
+        <div class="bar-row">
+          <div class="bar-name">Context-setting</div>
+          <div class="track" role="img" aria-label="48 to 82">
+            <div class="seg-before" style="width:48%"></div>
+            <div class="seg-gain" style="width:34%"></div>
+          </div>
+          <div class="bar-val">48<span class="to">→</span><b>82</b></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-name">Iterative refinement</div>
+          <div class="track" role="img" aria-label="45 to 74">
+            <div class="seg-before" style="width:45%"></div>
+            <div class="seg-gain" style="width:29%"></div>
+          </div>
+          <div class="bar-val">45<span class="to">→</span><b>74</b></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-name">Specificity</div>
+          <div class="track" role="img" aria-label="39 to 61">
+            <div class="seg-before" style="width:39%"></div>
+            <div class="seg-gain" style="width:22%"></div>
+          </div>
+          <div class="bar-val">39<span class="to">→</span><b>61</b></div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-name">
+            Critical evaluation
+            <span class="flag">Still your weakest</span>
+          </div>
+          <div class="track" role="img" aria-label="22 to 43">
+            <div class="seg-before" style="width:22%"></div>
+            <div class="seg-gain" style="width:21%"></div>
+          </div>
+          <div class="bar-val">22<span class="to">→</span><b>43</b></div>
+        </div>
+
+      </div>
+
+      <div class="legend">
+        <span><i style="background:var(--faint)"></i>Where you started in January</span>
+        <span><i style="background:var(--accent)"></i>Gained this term</span>
+      </div>
+    </div>
+
+    <!-- ── Prompts then / now ── -->
+    <h3 class="block">Your own words, then and now</h3>
+
+    <div class="prompts rv-in">
+      <div class="prompt then">
+        <div class="prompt-when">
+          <span class="d num">8 Jan</span>
+          <span class="w">your first session</span>
+        </div>
+        <blockquote class="quote">
+          “make me a lesson plan on fractions”
+        </blockquote>
+        <ul class="marks">
+          <li class="miss"><span class="m">✗</span>No grade level or lesson length</li>
+          <li class="miss"><span class="m">✗</span>Nothing about who's in the room</li>
+          <li class="miss"><span class="m">✗</span>No success criteria requested</li>
+          <li class="miss"><span class="m">✗</span>You used the first answer unchanged</li>
+        </ul>
+      </div>
+
+      <div class="prompt now">
+        <div class="prompt-when">
+          <span class="d num">2 May</span>
+          <span class="w">last week</span>
+        </div>
+        <blockquote class="quote">
+          “Grade 3 maths, 40 minutes. 24 kids — 5 are still shaky on equal shares from
+          last year, 2 are beginning ELLs, 1 has an IEP for working memory. Draft a
+          lesson putting fractions on a number line, with one measurable objective and
+          an exit ticket that maps to it. Then tell me what's weakest about it.”
+        </blockquote>
+        <ul class="marks">
+          <li class="has"><span class="m">✓</span>Grade, subject and duration up front</li>
+          <li class="has"><span class="m">✓</span>Named the actual learners in the room</li>
+          <li class="has"><span class="m">✓</span>Asked for a specific, checkable output</li>
+          <li class="has"><span class="m">✓</span>Asked the AI to critique its own answer</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── Cohort context ── -->
+    <h3 class="block">Some context for that last number</h3>
+
+    <div class="card card-pad cohort rv-in">
+      <p>
+        Critical evaluation — pushing back on what the AI hands you — is the skill
+        most teachers stall on. It's still your lowest score. It's also the one you
+        moved furthest this term, and by some distance.
+        <b>You gained 21 points. The typical teacher gains 6.</b>
+      </p>
+      <div class="num">
+        <div class="crow you">
+          <span class="cl">You</span>
+          <span class="cb" style="width:100%"></span>
+          <span class="cv">+21</span>
+        </div>
+        <div class="crow typ">
+          <span class="cl">Typical</span>
+          <span class="cb" style="width:29%"></span>
+          <span class="cv">+6</span>
+        </div>
+        <p class="no-rank">
+          Teach AI never ranks you against your colleagues. This is here to give your
+          own numbers a sense of scale — nothing else.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SESSION LEDGER ════════════════════════════════ -->
+  <section class="part">
+    <div class="part-head">
+      <div class="part-num num">·</div>
+      <div>
+        <h2 class="part-title">The seven conversations</h2>
+        <p class="part-sub">
+          What you asked about, and what moved in the weeks after.
+        </p>
+      </div>
+    </div>
+
+    <div class="ledger rv-in">
+
+      <div class="sess">
+        <div class="sess-date num">2 May</div>
+        <div>
+          <div class="sess-topic">Exit tickets an eight-year-old can actually finish</div>
+          <div class="sess-moved">
+            <span class="chip">Assessment Design +11</span>
+          </div>
+        </div>
+        <div class="sess-stats num">12 prompts · 38 min</div>
+      </div>
+
+      <div class="sess">
+        <div class="sess-date num">9 Apr</div>
+        <div>
+          <div class="sess-topic">Turning one read-aloud into three reading levels</div>
+          <div class="sess-moved">
+            <span class="chip">Differentiation +5</span>
+          </div>
+        </div>
+        <div class="sess-stats num">15 prompts · 41 min</div>
+      </div>
+
+      <div class="sess">
+        <div class="sess-date num">12 Mar</div>
+        <div>
+          <div class="sess-topic">Differentiating when reading levels span three years</div>
+          <div class="sess-moved">
+            <span class="chip">Lesson Planning +19</span>
+            <span class="chip">Differentiation +7</span>
+          </div>
+        </div>
+        <div class="sess-stats num">21 prompts · 52 min</div>
+      </div>
+
+      <div class="sess">
+        <div class="sess-date num">20 Feb</div>
+        <div>
+          <div class="sess-topic">Getting the AI to critique your own work</div>
+          <div class="sess-moved">
+            <span class="chip">Critical evaluation +21</span>
+          </div>
+        </div>
+        <div class="sess-stats num">9 prompts · 24 min</div>
+      </div>
+
+      <div class="sess">
+        <div class="sess-date num">8 Jan</div>
+        <div>
+          <div class="sess-topic">Your first conversation</div>
+          <div class="sess-moved">
+            <span class="chip base">Baseline set</span>
+          </div>
+        </div>
+        <div class="sess-stats num">6 prompts · 17 min</div>
+      </div>
+
+      <div class="ledger-more">2 shorter sessions not shown</div>
+    </div>
+  </section>
+
+  <!-- ══ PART 02 ═══════════════════════════════════════ -->
+  <section class="part">
+    <div class="part-head">
+      <div class="part-num num">02</div>
+      <div>
+        <h2 class="part-title">What it did for your teaching</h2>
+        <p class="part-sub">
+          Read from the 26 lesson plans, assessments and materials you authored in
+          Teach AI this term, across maths, reading and science. Each one is scored
+          against the same rubric, in the order you wrote them.
+        </p>
+      </div>
+    </div>
+
+    <div class="craft rv-in num">
+
+      <div class="craft-row">
+        <div class="craft-name">Lesson Planning</div>
+        <div class="track">
+          <div class="seg-before" style="width:62%"></div>
+          <div class="seg-gain" style="width:19%"></div>
+        </div>
+        <div class="craft-val">62 → <b>81</b></div>
+        <div class="craft-delta">+31%</div>
+        <div class="craft-count" style="grid-column:1/-1;text-align:left;padding-top:2px">
+          18 plans
+        </div>
+      </div>
+
+      <div class="craft-row">
+        <div class="craft-name">Assessment Design</div>
+        <div class="track">
+          <div class="seg-before" style="width:58%"></div>
+          <div class="seg-gain" style="width:10%"></div>
+        </div>
+        <div class="craft-val">58 → <b>68</b></div>
+        <div class="craft-delta">+18%</div>
+        <div class="craft-count" style="grid-column:1/-1;text-align:left;padding-top:2px">
+          5 assessments
+        </div>
+      </div>
+
+      <div class="craft-row">
+        <div class="craft-name">Differentiation</div>
+        <div class="track">
+          <div class="seg-before" style="width:51%"></div>
+          <div class="seg-gain" style="width:5%"></div>
+        </div>
+        <div class="craft-val">51 → <b>56</b></div>
+        <div class="craft-delta">+9%</div>
+        <div class="craft-count" style="grid-column:1/-1;text-align:left;padding-top:2px">
+          3 differentiated sets — too few to read confidently
+        </div>
+      </div>
+
+      <div class="craft-row empty">
+        <div class="craft-name">Student Feedback</div>
+        <div class="empty-note">
+          No work yet. Nothing to measure — this isn't a zero.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Hero timeline ── -->
+    <h3 class="block">Every lesson plan you wrote, in order</h3>
+
+    <div class="chart-wrap rv-in">
+      <div class="chart-head">
+        <div class="t">Lesson plan quality · rubric score out of 100</div>
+        <div class="l">
+          <i style="background:var(--faint)"></i>before 12 Mar
+          <i style="background:var(--accent)"></i>after
+        </div>
+      </div>
+
+      <svg viewBox="0 0 900 340" role="img"
+           aria-label="Scatter plot of 14 lesson plan scores from January to May. Six plans before the 12 March session average 58. Eight plans after average 81.">
+        <defs>
+          <linearGradient id="fade" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"  stop-color="var(--accent)" stop-opacity=".13"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+
+        <!-- gridlines -->
+        <g stroke="var(--rule-2)" stroke-width="1">
+          <line x1="60" y1="76.7"  x2="860" y2="76.7"/>
+          <line x1="60" y1="113.3" x2="860" y2="113.3"/>
+          <line x1="60" y1="150"   x2="860" y2="150"/>
+          <line x1="60" y1="186.7" x2="860" y2="186.7"/>
+          <line x1="60" y1="223.3" x2="860" y2="223.3"/>
+          <line x1="60" y1="260"   x2="860" y2="260"/>
+        </g>
+        <g fill="var(--faint)" font-size="11" text-anchor="end" font-family="inherit">
+          <text x="48" y="80.5">90</text>
+          <text x="48" y="117">80</text>
+          <text x="48" y="153.5">70</text>
+          <text x="48" y="190">60</text>
+          <text x="48" y="226.5">50</text>
+        </g>
+
+        <!-- after region tint -->
+        <rect x="433" y="40" width="427" height="220" fill="url(#fade)"/>
+
+        <!-- session marker -->
+        <line x1="433" y1="34" x2="433" y2="272"
+              stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <circle cx="433" cy="34" r="4" fill="var(--accent)"/>
+
+        <!-- mean lines -->
+        <line x1="100" y1="194" x2="425" y2="194"
+              stroke="var(--faint)" stroke-width="2"/>
+        <line x1="441" y1="109.7" x2="800" y2="109.7"
+              stroke="var(--accent)" stroke-width="2"/>
+        <text x="105" y="187" font-size="11.5" fill="var(--muted)" font-family="inherit">
+          avg 58 · 6 plans
+        </text>
+        <text x="446" y="102" font-size="11.5" fill="var(--accent)" font-weight="600" font-family="inherit">
+          avg 81 · 8 plans
+        </text>
+
+        <!-- before points -->
+        <g fill="var(--faint)">
+          <circle cx="118.7" cy="208.7" r="5.5"/>
+          <circle cx="193.3" cy="183"   r="5.5"/>
+          <circle cx="246.7" cy="197.7" r="5.5"/>
+          <circle cx="316"   cy="175.7" r="5.5"/>
+          <circle cx="369.3" cy="194"   r="5.5"/>
+          <circle cx="412"   cy="186.7" r="5.5"/>
+        </g>
+
+        <!-- after points -->
+        <g fill="var(--accent)">
+          <circle cx="476"   cy="150"   r="5.5"/>
+          <circle cx="524"   cy="128"   r="5.5"/>
+          <circle cx="566.7" cy="117"   r="5.5"/>
+          <circle cx="609.3" cy="109.7" r="5.5"/>
+          <circle cx="652"   cy="95"    r="5.5"/>
+          <circle cx="694.7" cy="102.3" r="5.5"/>
+          <circle cx="737.3" cy="84"    r="5.5"/>
+          <circle cx="774.7" cy="91.3"  r="5.5"/>
+        </g>
+
+        <!-- session label -->
+        <g font-family="inherit">
+          <text x="443" y="24" font-size="11" font-weight="700"
+                fill="var(--accent)" letter-spacing=".08em">12 MAR · SESSION</text>
+          <text x="443" y="48" font-size="12.5" fill="var(--ink-2)">
+            Differentiating when reading levels span three years
+          </text>
+        </g>
+
+        <!-- axis -->
+        <line x1="60" y1="290" x2="860" y2="290" stroke="var(--rule)" stroke-width="1"/>
+        <g fill="var(--muted)" font-size="12" text-anchor="middle" font-family="inherit">
+          <text x="140" y="310">Jan</text>
+          <text x="305" y="310">Feb</text>
+          <text x="455" y="310">Mar</text>
+          <text x="620" y="310">Apr</text>
+          <text x="780" y="310">May</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="caveat col">
+      <span class="ic" aria-hidden="true">i</span>
+      <div>
+        We can't prove the March session caused this. Plenty of things change across a
+        term. What we can show you is every plan you wrote, in the order you wrote them,
+        and exactly where the session sat.
+      </div>
+    </div>
+
+    <!-- ── Lesson planning deep dive ── -->
+    <h3 class="block">Lesson planning · what the score is made of</h3>
+
+    <div class="card deep rv-in">
+      <div class="rub">
+        <div class="deep-h">Rubric · 18 plans · out of 5</div>
+
+        <div class="rrow">
+          <div>
+            <div class="rn">Measurable objectives</div>
+            <div class="rdots" aria-hidden="true">
+              <span class="f"></span><span class="f"></span><span class="f"></span>
+              <span class="g"></span><span class="g"></span>
+            </div>
+          </div>
+          <div class="rv num">3.1<span class="to">→</span><b>4.6</b></div>
+        </div>
+
+        <div class="rrow">
+          <div>
+            <div class="rn">Assessment alignment</div>
+            <div class="rdots" aria-hidden="true">
+              <span class="f"></span><span class="f"></span><span class="f"></span>
+              <span class="g"></span><span></span>
+            </div>
+          </div>
+          <div class="rv num">2.8<span class="to">→</span><b>4.2</b></div>
+        </div>
+
+        <div class="rrow">
+          <div>
+            <div class="rn">Pacing detail</div>
+            <div class="rdots" aria-hidden="true">
+              <span class="f"></span><span class="f"></span><span class="f"></span>
+              <span class="g"></span><span></span>
+            </div>
+          </div>
+          <div class="rv num">3.4<span class="to">→</span><b>4.1</b></div>
+        </div>
+
+        <div class="rrow">
+          <div>
+            <div class="rn">Differentiation</div>
+            <div class="rdots" aria-hidden="true">
+              <span class="f"></span><span class="f"></span><span class="g"></span>
+              <span></span><span></span>
+            </div>
+          </div>
+          <div class="rv num">2.2<span class="to">→</span><b>3.0</b></div>
+        </div>
+
+        <div class="rrow">
+          <div>
+            <div class="rn">Engagement hooks</div>
+            <div class="rdots" aria-hidden="true">
+              <span class="f"></span><span class="f"></span><span class="f"></span>
+              <span></span><span></span>
+            </div>
+          </div>
+          <div class="rv num">3.0<span class="to">→</span><b>3.2</b></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="deep-h">What changed, concretely</div>
+        <ul class="ev num">
+          <li>
+            <div class="et">You started closing lessons with an exit ticket</div>
+            <div class="en">
+              <span class="b">1 of 6 plans</span>
+              <span class="arw">→</span>
+              <span class="a">8 of 8 plans</span>
+            </div>
+          </li>
+          <li>
+            <div class="et">Your objectives became checkable</div>
+            <div class="en">
+              <span class="b">“students will understand fractions”</span>
+              <span class="arw">→</span>
+              <span class="a">“students will place ¼ and ½ on a number line”</span>
+            </div>
+          </li>
+          <li>
+            <div class="et">You began naming support for specific learners</div>
+            <div class="en">
+              <span class="b">0 of 6 plans</span>
+              <span class="arw">→</span>
+              <span class="a">5 of 8 plans</span>
+            </div>
+          </li>
+          <li>
+            <div class="et">Vague success criteria per plan</div>
+            <div class="en">
+              <span class="b">2.4 average</span>
+              <span class="arw">→</span>
+              <span class="a">0.6 average</span>
+            </div>
+          </li>
+          <li>
+            <div class="et">Engagement hooks stayed where they were</div>
+            <div class="en">
+              <span class="b">the one thing that didn't move this term</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  // Theme toggle — starts on system preference, then follows the button.
+  var root = document.documentElement;
+  document.getElementById('theme').addEventListener('click', function () {
+    var sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var cur = root.getAttribute('data-theme') || (sysDark ? 'dark' : 'light');
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  });
+
+  // Reveal on scroll.
+  var els = document.querySelectorAll('.rv-in');
+  if (!('IntersectionObserver' in window)) {
+    els.forEach(function (el) { el.classList.add('on'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); }
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+  els.forEach(function (el) { io.observe(el); });
+})();
+</script>
+
+</body>
+</html>
