@@ -34,6 +34,17 @@
   border: 2px solid var(--color-royal);
 }
 
+/* Modifiers for .rough-border. These need the doubled class so they outrank
+   Tailwind's border-* utilities, which the shorthand in .rough-border would
+   otherwise override. */
+.rough-border.is-dashed {
+  border-style: dashed;
+}
+
+.rough-border.is-royal {
+  border-color: var(--color-royal);
+}
+
 .rough-button {
   border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
   border: 2px solid var(--color-ink);

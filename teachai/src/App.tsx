@@ -1,374 +1,660 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Send, Sparkles, ArrowRight, LayoutDashboard, User, 
-  Settings, BrainCircuit, Hammer, Paperclip, FileText, 
-  CircleDashed, CheckCircle2, ChevronLeft, ArrowUpRight
-} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react'
+import {
+  AlertCircle,
+  ArrowRight,
+  FileText,
+  Paperclip,
+  RotateCcw,
+  Send,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import TrainingWorkspace, { type PromptRun } from '@/components/TrainingWorkspace'
+import IntakePanel from '@/components/IntakePanel'
+import PlanCard from '@/components/PlanCard'
+import {
+  analyzeLessonPlan,
+  buildImprovedPlan,
+  buildPlanFromIntake,
+  friendlyError,
+  generateIntake,
+  runTrainingPrompt,
+  streamCoach,
+  type ChatTurn,
+  type PlanSource,
+} from '@/lib/claude'
+import { readPlanFile } from '@/lib/file'
+import type { Analysis, Intake, LessonPlan } from '@/lib/schemas'
 
-type Message = { role: 'user' | 'ai'; content: string; };
-type ViewState = 'onboarding' | 'dashboard' | 'build_chat';
+type Phase =
+  | 'landing'
+  | 'coaching'
+  | 'choosing'
+  | 'awaiting_plan'
+  | 'analyzing'
+  | 'training'
+  | 'intake'
+  | 'building'
+  | 'done'
 
-// Mock Data for the Dashboard
-const MOCK_SKILLS = ["React Novice", "UX Enthusiast", "Fearless Break-er", "Prompt Tinkerer"];
-const MOCK_TASKS = [
-  { id: 1, title: "Personal Portfolio V1", status: "Drafting layout", progress: 25 },
-  { id: 2, title: "Figma Plugin Prototype", status: "Stuck on API", progress: 60 },
-];
+type Item =
+  | { id: number; kind: 'user'; text: string; attachment?: string }
+  | { id: number; kind: 'coach'; text: string; streaming: boolean }
+  | { id: number; kind: 'choice'; answered: 'yes' | 'no' | null }
+  | { id: number; kind: 'working'; label: string }
+  | { id: number; kind: 'error'; text: string }
+  | { id: number; kind: 'analysis' }
+  | { id: number; kind: 'intake' }
+  | { id: number; kind: 'plan' }
+
+type NewItem = Item extends infer T ? (T extends Item ? Omit<T, 'id'> : never) : never
+
+// These take about a minute, so the labels walk forward once and hold on the
+// last one — a looping ticker reads as stuck.
+const ANALYZING_STEPS = [
+  'Reading your lesson plan...',
+  'Finding where the thinking actually happens...',
+  'Checking which scaffolds quietly remove the math...',
+  'Looking at who this reaches and who it loses...',
+  'Choosing the prompting moves to teach you...',
+  'Writing your prompts, filled in for this lesson...',
+  'Almost there...',
+]
+
+const BUILDING_STEPS = [
+  'Putting the moves together...',
+  'Settling on the big idea...',
+  'Writing the questions you will ask...',
+  'Building scaffolds that keep the demand high...',
+  'Timing the phases...',
+  'Writing the exit ticket...',
+  'Almost there...',
+]
 
 export default function App() {
-  const [view, setView] = useState<ViewState>('onboarding');
-  
-  // Onboarding Chat State
-  const [onboardingInput, setOnboardingInput] = useState('');
-  const [onboardingMessages, setOnboardingMessages] = useState<Message[]>([]);
-  const [isOnboardingTyping, setIsOnboardingTyping] = useState(false);
-  const onboardingEndRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<Phase>('landing')
+  const [items, setItems] = useState<Item[]>([])
+  const [turns, setTurns] = useState<ChatTurn[]>([])
 
-  // Dashboard State
-  const [dashboardPrompt, setDashboardPrompt] = useState('');
+  const [input, setInput] = useState('')
+  const [attachment, setAttachment] = useState<{ name: string; source: PlanSource } | null>(null)
 
-  // Build Chat State
-  const [activeProject, setActiveProject] = useState('');
-  const [buildInput, setBuildInput] = useState('');
-  const [buildMessages, setBuildMessages] = useState<Message[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
-  const buildEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [runs, setRuns] = useState<Record<number, PromptRun>>({})
+  const [intake, setIntake] = useState<Intake | null>(null)
+  const [plan, setPlan] = useState<LessonPlan | null>(null)
 
-  // Scroll Helpers
+  const nextId = useRef(0)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const busy = phase === 'analyzing' || phase === 'building' || items.some((i) => i.kind === 'working')
+  const streaming = items.some((i) => i.kind === 'coach' && i.streaming)
+
   useEffect(() => {
-    if (view === 'onboarding') onboardingEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    if (view === 'build_chat') buildEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [onboardingMessages, isOnboardingTyping, buildMessages, view]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [items, analysis, intake, plan])
 
-  // Handlers
-  const handleOnboardingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onboardingInput.trim()) return;
-    const userMsg = onboardingInput.trim();
-    setOnboardingInput('');
-    setOnboardingMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-    setIsOnboardingTyping(true);
-    setTimeout(() => {
-      setOnboardingMessages(prev => [
-        ...prev,
-        { role: 'ai', content: "That's a really interesting direction! I can definitely help you with that. What's the biggest challenge you're facing with it right now?" }
-      ]);
-      setIsOnboardingTyping(false);
-    }, 1500);
-  };
+  // -- transcript helpers ---------------------------------------------------
 
-  const handleStartBuilding = (projectName: string) => {
-    setActiveProject(projectName || "New Idea");
-    setBuildMessages([
-      { role: 'ai', content: "Build it. (Make mistakes, run into walls, that's how we learn how to ride bikes, drive cars, it's how we learn AI)." }
-    ]);
-    setView('build_chat');
-  };
+  // Omit/Partial over a union collapse to the shared keys, so distribute first.
+  const add = (item: NewItem) => {
+    const id = nextId.current++
+    setItems((prev) => [...prev, { ...item, id } as Item])
+    return id
+  }
 
-  const handleDashboardPromptSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dashboardPrompt.trim()) return;
-    handleStartBuilding(dashboardPrompt);
-    setDashboardPrompt('');
-  };
+  const patch = (id: number, update: Record<string, unknown>) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? ({ ...i, ...update } as Item) : i)))
+  }
 
-  const handleBuildSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!buildInput.trim()) return;
-    const msg = buildInput.trim();
-    setBuildInput('');
-    setBuildMessages(prev => [...prev, { role: 'user', content: msg }]);
-    setTimeout(() => {
-      setBuildMessages(prev => [...prev, { role: 'ai', content: "Let's wire that up. Have you tried looking at the documentation for that specific hook?" }]);
-    }, 1000);
-  };
+  const drop = (id: number) => setItems((prev) => prev.filter((i) => i.id !== id))
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const fileNames = Array.from(e.target.files).map(f => f.name);
-      setUploadedFiles(prev => [...prev, ...fileNames]);
+  /** Walks a working item through its labels, holding on the last one. */
+  const advance = (id: number, steps: string[]) => {
+    let step = 0
+    return setInterval(() => {
+      if (step >= steps.length - 1) return
+      step += 1
+      patch(id, { label: steps[step] })
+    }, 9000)
+  }
+
+  const fail = (err: unknown) => {
+    add({ kind: 'error', text: friendlyError(err) })
+  }
+
+  // -- the coach turn -------------------------------------------------------
+
+  const sendToCoach = async (text: string, firstTurn: boolean) => {
+    const history: ChatTurn[] = [...turns, { role: 'user', content: text }]
+    setTurns(history)
+
+    const coachId = add({ kind: 'coach', text: '', streaming: true })
+
+    try {
+      const full = await streamCoach(history, { firstTurn }, (delta) => {
+        setItems((prev) =>
+          prev.map((i) => (i.id === coachId && i.kind === 'coach' ? { ...i, text: i.text + delta } : i)),
+        )
+      })
+      patch(coachId, { text: full, streaming: false })
+      setTurns([...history, { role: 'assistant', content: full }])
+      return true
+    } catch (err) {
+      drop(coachId)
+      fail(err)
+      return false
     }
-  };
+  }
 
-  // ---------------------------------------------------------------------------
-  // VIEW: ONBOARDING
-  // ---------------------------------------------------------------------------
-  if (view === 'onboarding') {
-    const showContinue = onboardingMessages.length > 0 && onboardingMessages[onboardingMessages.length - 1].role === 'ai' && !isOnboardingTyping;
+  // -- composer -------------------------------------------------------------
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (busy || streaming) return
+
+    // The lesson plan hand-off: an attachment is the message.
+    if (phase === 'awaiting_plan') {
+      if (!attachment) return
+      const note = input.trim()
+      setInput('')
+      const source = attachment.source
+      add({ kind: 'user', text: note, attachment: attachment.name })
+      setAttachment(null)
+      await analyze(source)
+      return
+    }
+
+    const text = input.trim()
+    if (!text) return
+    setInput('')
+    add({ kind: 'user', text })
+
+    if (phase === 'landing') {
+      setPhase('coaching')
+      const ok = await sendToCoach(text, true)
+      if (ok) {
+        add({ kind: 'choice', answered: null })
+        setPhase('choosing')
+      } else {
+        setPhase('landing')
+      }
+      return
+    }
+
+    await sendToCoach(text, false)
+  }
+
+  // -- yes / no -------------------------------------------------------------
+
+  const answerChoice = async (choiceId: number, answer: 'yes' | 'no') => {
+    patch(choiceId, { answered: answer })
+
+    if (answer === 'yes') {
+      add({ kind: 'user', text: 'Yes, I have one.' })
+      setTurns((t) => [...t, { role: 'user', content: 'Yes, I have a sample lesson plan.' }])
+      add({
+        kind: 'coach',
+        text: 'Good. Attach it below and hit enter. I want to read the real thing, not a description of it.',
+        streaming: false,
+      })
+      setPhase('awaiting_plan')
+      return
+    }
+
+    add({ kind: 'user', text: "No, I don't have one to share." })
+    setPhase('intake')
+    const workingId = add({ kind: 'working', label: 'Thinking about what I need to ask you...' })
+
+    try {
+      const result = await generateIntake(turns)
+      drop(workingId)
+      setIntake(result)
+      add({ kind: 'intake' })
+    } catch (err) {
+      drop(workingId)
+      fail(err)
+      setPhase('choosing')
+    }
+  }
+
+  // -- path A: analyze an uploaded plan -------------------------------------
+
+  const analyze = async (source: PlanSource) => {
+    setPhase('analyzing')
+    const workingId = add({ kind: 'working', label: ANALYZING_STEPS[0] })
+
+    const ticker = advance(workingId, ANALYZING_STEPS)
+
+    try {
+      const result = await analyzeLessonPlan(source)
+      setAnalysis(result)
+      add({ kind: 'analysis' })
+      setPhase('training')
+    } catch (err) {
+      fail(err)
+      setPhase('awaiting_plan')
+    } finally {
+      clearInterval(ticker)
+      drop(workingId)
+    }
+  }
+
+  const handleRunPrompt = async (index: number, prompt: string) => {
+    setRuns((r) => ({ ...r, [index]: { text: '', running: true } }))
+    try {
+      const full = await runTrainingPrompt(prompt, (delta) => {
+        setRuns((r) => ({ ...r, [index]: { text: (r[index]?.text ?? '') + delta, running: true } }))
+      })
+      setRuns((r) => ({ ...r, [index]: { text: full, running: false } }))
+    } catch (err) {
+      setRuns((r) => {
+        const next = { ...r }
+        delete next[index]
+        return next
+      })
+      fail(err)
+    }
+  }
+
+  const handleBuildImproved = async () => {
+    if (!analysis) return
+    setPhase('building')
+    const workingId = add({ kind: 'working', label: BUILDING_STEPS[0] })
+
+    const ticker = advance(workingId, BUILDING_STEPS)
+
+    try {
+      const result = await buildImprovedPlan(analysis)
+      setPlan(result)
+      add({ kind: 'plan' })
+      setPhase('done')
+    } catch (err) {
+      fail(err)
+      setPhase('training')
+    } finally {
+      clearInterval(ticker)
+      drop(workingId)
+    }
+  }
+
+  // -- path B: build from intake answers ------------------------------------
+
+  const handleIntakeSubmit = async (answers: Record<string, string>) => {
+    if (!intake) return
+    setPhase('building')
+    const workingId = add({ kind: 'working', label: BUILDING_STEPS[0] })
+
+    const ticker = advance(workingId, BUILDING_STEPS)
+
+    try {
+      const result = await buildPlanFromIntake(intake, answers)
+      setPlan(result)
+      add({ kind: 'plan' })
+      setPhase('done')
+    } catch (err) {
+      fail(err)
+      setPhase('intake')
+    } finally {
+      clearInterval(ticker)
+      drop(workingId)
+    }
+  }
+
+  // -- attachments ----------------------------------------------------------
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const source = await readPlanFile(file)
+      setAttachment({ name: file.name, source })
+    } catch (err) {
+      fail(err)
+    }
+  }
+
+  const restart = () => {
+    setPhase('landing')
+    setItems([])
+    setTurns([])
+    setInput('')
+    setAttachment(null)
+    setAnalysis(null)
+    setRuns({})
+    setIntake(null)
+    setPlan(null)
+  }
+
+  // -------------------------------------------------------------------------
+  // Landing
+  // -------------------------------------------------------------------------
+
+  if (phase === 'landing' && items.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col bg-paper text-ink selection:bg-royal selection:text-paper relative font-sans">
-        {onboardingMessages.length === 0 && (
-          <>
-            <div className="absolute top-12 left-12 text-royal opacity-20 -rotate-12 pointer-events-none">
-              <Sparkles size={48} strokeWidth={1} />
-            </div>
-            <div className="absolute bottom-48 right-16 text-ink opacity-10 rotate-12 pointer-events-none">
-              <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 50 C 30 10, 70 10, 90 50 C 70 90, 30 90, 10 50" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-          </>
-        )}
-        <main className="flex-grow flex flex-col items-center overflow-y-auto pt-12 pb-40 px-4 md:px-8 w-full scroll-smooth">
-          <div className={`flex flex-col items-center text-center max-w-4xl w-full z-10 transition-all duration-1000 ease-in-out ${onboardingMessages.length === 0 ? 'my-auto scale-100 opacity-100' : 'mt-4 mb-16 scale-75 opacity-40 origin-top'}`}>
-            <h1 className="text-6xl md:text-8xl lg:text-9xl font-display text-ink mb-12 -rotate-2">
-              who are <span className="text-royal scribble-underline">YOU?</span>
-            </h1>
-            <p className="text-xl md:text-2xl font-sans opacity-80 leading-relaxed max-w-2xl mx-auto">
-              what do you do, what are your goals, we will give you the space to learn ai while being <span className="font-display text-4xl text-royal ml-1 -rotate-3 inline-block">you.</span>
-            </p>
-          </div>
-          {onboardingMessages.length > 0 && (
-            <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto z-10 animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both">
-              {onboardingMessages.map((msg, idx) => (
-                <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`p-5 md:p-6 max-w-[85%] md:max-w-[75%] leading-relaxed text-lg animate-in fade-in slide-in-from-bottom-4 duration-500 ${msg.role === 'user' ? 'bg-royal text-paper rough-border-blue' : 'bg-paper text-ink rough-border sketch-box-shadow'}`}>
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
-              {isOnboardingTyping && (
-                <div className="flex w-full justify-start animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="p-5 md:p-6 bg-paper text-ink rough-border sketch-box-shadow flex gap-2 items-center">
-                    <div className="w-2 h-2 bg-royal rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-2 h-2 bg-royal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-2 h-2 bg-royal rounded-full animate-bounce"></div>
-                  </div>
-                </div>
-              )}
-              {showContinue && (
-                <div className="flex w-full justify-center mt-6 mb-8 animate-in fade-in zoom-in duration-500 delay-300 fill-mode-both">
-                  <button onClick={() => setView('dashboard')} className="px-6 py-4 md:px-8 md:py-5 rough-button font-bold text-lg flex items-center gap-3 sketch-box-shadow hover:-translate-y-1 hover:shadow-none transition-all group">
-                    "I think you've got it" 
-                    <span className="text-royal group-hover:text-paper ml-2 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-all">
-                      Go to Dashboard <ArrowRight size={20} />
-                    </span>
-                  </button>
-                </div>
-              )}
-              <div ref={onboardingEndRef} className="h-4" />
-            </div>
-          )}
-        </main>
-        <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
-          <div className="max-w-3xl mx-auto">
-            <form onSubmit={handleOnboardingSubmit} className="flex gap-2 sm:gap-4 p-2 bg-paper rough-border sketch-box-shadow-blue items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform">
-              <input type="text" value={onboardingInput} onChange={e => setOnboardingInput(e.target.value)} placeholder="I am a designer trying to build a..." className="flex-grow bg-transparent outline-none p-4 font-sans text-lg placeholder-ink placeholder-opacity-40" autoFocus disabled={isOnboardingTyping} />
-              <button type="submit" disabled={!onboardingInput.trim() || isOnboardingTyping} className={`p-4 md:px-8 rough-button-blue font-bold flex items-center justify-center gap-2 transition-all mr-1 my-1 ${(!onboardingInput.trim() || isOnboardingTyping) ? 'opacity-50 cursor-not-allowed hover:bg-royal hover:text-paper hover:translate-y-0 hover:translate-x-0' : ''}`}>
-                <span className="hidden sm:inline">Send</span><Send size={20} className="sm:ml-2" />
-              </button>
-            </form>
-          </div>
+      <div className="min-h-screen flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper relative">
+        <div className="absolute top-12 left-12 text-royal opacity-20 -rotate-12 pointer-events-none">
+          <Sparkles size={48} strokeWidth={1} />
         </div>
-      </div>
-    );
-  }
+        <div className="absolute bottom-56 right-16 text-ink opacity-10 rotate-12 pointer-events-none">
+          <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M10 50 C 30 10, 70 10, 90 50 C 70 90, 30 90, 10 50"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
 
-  // ---------------------------------------------------------------------------
-  // VIEW: DASHBOARD
-  // ---------------------------------------------------------------------------
-  if (view === 'dashboard') {
-    return (
-      <div className="h-screen bg-paper text-ink flex overflow-hidden font-sans selection:bg-royal selection:text-paper">
-        
-        {/* SIDEBAR: Intentional placement for global/meta navigation. Keeps the main area focused on action. */}
-        <aside className="w-72 border-r-2 border-ink flex flex-col p-6 hidden md:flex shrink-0 relative h-full">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-royal rounded-full flex items-center justify-center text-paper rough-border-blue -rotate-6">
-              <User size={24} />
-            </div>
-            <div>
-              <h2 className="font-display text-2xl font-bold">You.</h2>
-              <p className="text-sm opacity-60">Learner & Builder</p>
-            </div>
-          </div>
-
-          <nav className="flex flex-col gap-4 flex-grow">
-            <button className="flex items-center gap-3 text-lg font-bold text-royal hover:translate-x-1 transition-transform w-full text-left">
-              <LayoutDashboard size={20} /> Dashboard
-            </button>
-            <button className="flex items-center gap-3 text-lg font-bold opacity-60 hover:opacity-100 hover:translate-x-1 transition-transform w-full text-left">
-              <Settings size={20} /> Settings
-            </button>
-          </nav>
-
-          {/* AI MEMORY: Placed at the bottom of the nav to act as a grounded reflective space. */}
-          <div className="mt-auto pt-4 border-t-2 border-ink border-dashed">
-            <div className="flex items-center gap-2 mb-2 text-royal font-bold">
-              <BrainCircuit size={20} /> AI Memory
-            </div>
-            <p className="text-xs opacity-80 mb-4 leading-relaxed">
-              Any updates? Wanna talk about your growth since we first met?
+        <main className="flex-grow flex flex-col items-center justify-center px-4 md:px-8 pb-40">
+          <div className="max-w-4xl w-full text-center z-10">
+            <p className="font-mono text-xs uppercase tracking-widest opacity-40 mb-8">
+              TeachAI &middot; your lesson planning coach
             </p>
-            <button 
-              onClick={() => setView('onboarding')}
-              className="w-full py-2 rough-button text-sm font-bold sketch-box-shadow hover:-translate-y-1 hover:shadow-none transition-all"
-            >
-              Update Memory
-            </button>
-          </div>
-        </aside>
-
-        {/* MAIN DASHBOARD CONTENT */}
-        <main className="flex-grow overflow-y-auto p-6 md:p-8 scroll-smooth h-full">
-          <div className="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
-            
-            {/* Header & Skills */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h1 className="text-4xl md:text-5xl font-display mb-4 -rotate-1">
-                Your <span className="text-royal scribble-underline">Toolkit</span>
-              </h1>
-              <p className="opacity-60 mb-4 font-mono text-sm uppercase tracking-wider">AI-Identified Core Skills</p>
-              <div className="flex flex-wrap gap-2">
-                {MOCK_SKILLS.map((skill, i) => (
-                  <span key={i} className="px-3 py-1.5 rough-border border-ink bg-transparent text-ink text-sm font-bold rotate-1 hover:-rotate-1 transition-transform cursor-default">
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </section>
-
-            {/* The Chat Bar - Placed prominently in the middle as the primary catalyst for new action */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
-              <h2 className="text-xl md:text-2xl font-display mb-3 text-royal rotate-1">Something else in mind? Let's build.</h2>
-              <form onSubmit={handleDashboardPromptSubmit} className="flex gap-2 p-2 bg-paper rough-border sketch-box-shadow items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform">
-                <input 
-                  type="text" 
-                  value={dashboardPrompt}
-                  onChange={e => setDashboardPrompt(e.target.value)}
-                  placeholder="Describe what you want to make..." 
-                  className="flex-grow bg-transparent outline-none p-3 md:p-4 font-sans text-base md:text-lg placeholder-ink placeholder-opacity-40"
-                />
-                <button 
-                  type="submit"
-                  disabled={!dashboardPrompt.trim()}
-                  className="p-3 md:p-4 rough-button font-bold flex items-center justify-center gap-2 hover:bg-ink hover:text-paper disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Hammer size={20} /> <span className="hidden sm:inline">Start</span>
-                </button>
-              </form>
-            </section>
-
-            {/* Task List - Placed below the prompt bar because existing tasks flow downwards from new creations */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300 fill-mode-both flex-grow">
-              <h2 className="text-xl md:text-2xl font-display mb-4 -rotate-1">Active Projects</h2>
-              <div className="grid gap-4">
-                {MOCK_TASKS.map((task, i) => (
-                  <div key={task.id} className={`p-4 md:p-6 rough-border bg-paper sketch-box-shadow flex flex-col md:flex-row md:items-center justify-between gap-4 transition-transform hover:translate-x-1 ${i % 2 === 0 ? 'rotate-1' : '-rotate-1'}`}>
-                    <div className="flex-grow">
-                      <h3 className="text-lg md:text-xl font-bold mb-2">{task.title}</h3>
-                      <div className="flex items-center gap-4 text-sm opacity-80">
-                        <span className="flex items-center gap-1"><CircleDashed size={16} /> {task.status}</span>
-                        <span className="flex items-center gap-1"><CheckCircle2 size={16} /> {task.progress}%</span>
-                      </div>
-                      {/* Simple progress bar */}
-                      <div className="w-full h-2 bg-ink bg-opacity-10 rounded-full mt-3 overflow-hidden">
-                        <div className="h-full bg-royal" style={{ width: `${task.progress}%` }}></div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleStartBuilding(task.title)}
-                      className="whitespace-nowrap px-4 py-3 md:px-6 md:py-4 rough-button-blue font-bold flex items-center gap-2 sketch-box-shadow-blue hover:-translate-y-1 hover:shadow-none transition-all shrink-0"
-                    >
-                      Build it <ArrowUpRight size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-display text-ink mb-10 -rotate-2 leading-[0.95]">
+              how can i help you <span className="text-royal scribble-underline">Melissa?</span>
+            </h1>
+            <p className="text-lg md:text-xl opacity-70 leading-relaxed max-w-2xl mx-auto">
+              Tell me what you are working on and I will teach you how to plan it with AI &mdash; so you can do it again
+              next week without me.
+            </p>
           </div>
         </main>
+
+        <Composer
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          placeholder="I'm teaching rational functions on Thursday and it fell flat last year..."
+          disabled={streaming}
+          allowAttach={false}
+          attachment={attachment}
+          onAttachClick={() => fileInputRef.current?.click()}
+          onClearAttachment={() => setAttachment(null)}
+          autoFocus
+        />
+        <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" />
       </div>
-    );
+    )
   }
 
-  // ---------------------------------------------------------------------------
-  // VIEW: BUILD CHAT
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Session
+  // -------------------------------------------------------------------------
+
+  const canType = !busy && !streaming
+  const placeholder =
+    phase === 'awaiting_plan'
+      ? attachment
+        ? 'Add a note if you want, then hit enter'
+        : 'Attach your lesson plan with the clip, or paste it here'
+      : phase === 'training'
+        ? 'Ask me anything about these moves...'
+        : phase === 'done'
+          ? 'What else do you want to work on?'
+          : 'Say more...'
+
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink selection:bg-royal selection:text-paper font-sans">
-      {/* Header */}
-      <header className="p-4 md:p-6 border-b-2 border-ink border-dashed flex items-center justify-between sticky top-0 bg-paper z-40">
-        <button 
-          onClick={() => setView('dashboard')}
-          className="flex items-center gap-2 font-bold hover:text-royal transition-colors"
-        >
-          <ChevronLeft size={20} /> Back to Dashboard
-        </button>
-        <div className="font-display text-xl text-royal truncate max-w-[50%] -rotate-1">
-          Building: <span className="scribble-underline">{activeProject}</span>
+    <div className="min-h-screen flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper">
+      <header className="sticky top-0 z-40 bg-paper border-b-2 border-dashed border-ink px-4 md:px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Sparkles size={20} className="text-royal" />
+          <span className="font-display text-2xl -rotate-1">TeachAI</span>
+          <span className="hidden sm:inline text-sm opacity-50">coaching Melissa &middot; Precalculus</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={restart}
+            className="px-3 py-2 text-sm font-bold flex items-center gap-2 hover:text-royal transition-colors"
+          >
+            <RotateCcw size={16} /> <span className="hidden sm:inline">Start over</span>
+          </button>
         </div>
       </header>
 
-      {/* Chat Area */}
-      <main className="flex-grow flex flex-col overflow-y-auto p-4 md:p-8 scroll-smooth pb-48">
-        <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto">
-          {buildMessages.map((msg, idx) => (
-            <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-5 md:p-6 max-w-[85%] md:max-w-[75%] leading-relaxed text-lg animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'bg-royal text-paper rough-border-blue' : 'bg-paper text-ink rough-border sketch-box-shadow'}`}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-          <div ref={buildEndRef} className="h-4" />
+      <main className="flex-grow overflow-y-auto px-4 md:px-8 pt-8 pb-56 scroll-smooth">
+        <div className="max-w-4xl mx-auto flex flex-col gap-6">
+          {items.map((item) => {
+            switch (item.kind) {
+              case 'user':
+                return (
+                  <div key={item.id} className="flex justify-end">
+                    <div className="max-w-[85%] md:max-w-[75%] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {item.attachment && (
+                        <div className="px-3 py-2 bg-ink text-paper text-sm font-mono flex items-center gap-2 rough-border">
+                          <FileText size={14} /> {item.attachment}
+                        </div>
+                      )}
+                      {item.text && (
+                        <div className="p-5 bg-royal text-paper rough-border-blue leading-relaxed text-lg">
+                          {item.text}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+
+              case 'coach':
+                return (
+                  <div key={item.id} className="flex justify-start">
+                    <div className="max-w-[85%] md:max-w-[75%] p-5 md:p-6 bg-paper rough-border sketch-box-shadow leading-relaxed text-lg whitespace-pre-wrap animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {item.text}
+                      {item.streaming && (
+                        <span className="inline-block w-2 h-5 bg-royal align-middle ml-0.5 animate-pulse" />
+                      )}
+                    </div>
+                  </div>
+                )
+
+              case 'choice':
+                return (
+                  <div key={item.id} className="flex flex-wrap gap-3 pl-1 animate-in fade-in duration-500">
+                    <button
+                      onClick={() => answerChoice(item.id, 'yes')}
+                      disabled={item.answered !== null || busy}
+                      className={`px-6 py-4 font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        item.answered === 'yes' ? 'bg-royal text-paper rough-border-blue' : 'rough-button-blue sketch-box-shadow-blue hover:-translate-y-1 hover:shadow-none'
+                      }`}
+                    >
+                      Yes, I have one <ArrowRight size={18} />
+                    </button>
+                    <button
+                      onClick={() => answerChoice(item.id, 'no')}
+                      disabled={item.answered !== null || busy}
+                      className={`px-6 py-4 font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        item.answered === 'no' ? 'bg-ink text-paper rough-border' : 'rough-button sketch-box-shadow hover:-translate-y-1 hover:shadow-none'
+                      }`}
+                    >
+                      No, not right now
+                    </button>
+                  </div>
+                )
+
+              case 'working':
+                return (
+                  <div key={item.id} className="flex justify-start animate-in fade-in duration-300">
+                    <div className="p-5 md:p-6 bg-paper rough-border sketch-box-shadow flex items-center gap-4">
+                      <div className="flex gap-1.5">
+                        <span className="w-2 h-2 bg-royal rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-2 h-2 bg-royal rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-2 h-2 bg-royal rounded-full animate-bounce" />
+                      </div>
+                      <span className="text-lg opacity-70">{item.label}</span>
+                      <Elapsed />
+                    </div>
+                  </div>
+                )
+
+              case 'error':
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 p-5 rough-border is-royal bg-royal/5 animate-in fade-in duration-300"
+                  >
+                    <AlertCircle size={20} className="text-royal shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">{item.text}</p>
+                  </div>
+                )
+
+              case 'analysis':
+                return analysis ? (
+                  <div key={item.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <TrainingWorkspace
+                      analysis={analysis}
+                      runs={runs}
+                      onRunPrompt={handleRunPrompt}
+                      onBuildImproved={handleBuildImproved}
+                      buildingPlan={phase === 'building'}
+                      planBuilt={Boolean(plan)}
+                    />
+                  </div>
+                ) : null
+
+              case 'intake':
+                return intake ? (
+                  <div key={item.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <IntakePanel
+                      intake={intake}
+                      onSubmit={handleIntakeSubmit}
+                      submitting={phase === 'building'}
+                      locked={Boolean(plan)}
+                    />
+                  </div>
+                ) : null
+
+              case 'plan':
+                return plan ? (
+                  <div key={item.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <PlanCard plan={plan} />
+                  </div>
+                ) : null
+            }
+          })}
+          <div ref={bottomRef} className="h-2" />
         </div>
       </main>
 
-      {/* Input Area (Bottom Fixed) */}
-      <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
-        <div className="max-w-4xl mx-auto flex flex-col gap-2">
-          
-          {/* Uploaded Files Bar */}
-          {uploadedFiles.length > 0 && (
-            <div className="flex gap-2 flex-wrap mb-2 animate-in fade-in slide-in-from-bottom-2">
-              {uploadedFiles.map((file, i) => (
-                <div key={i} className="px-3 py-1 bg-ink text-paper text-sm font-mono rough-border flex items-center gap-2">
-                  <FileText size={14} /> {file}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <form onSubmit={handleBuildSubmit} className="flex gap-2 sm:gap-4 p-2 bg-paper rough-border sketch-box-shadow items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform relative">
-            
-            {/* File Upload Button */}
-            <input 
-              type="file" 
-              multiple 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-            />
-            <button 
-              type="button"
+      {phase === 'awaiting_plan' && !attachment && (
+        <div className="fixed bottom-32 left-0 w-full px-4 md:px-8 z-40 pointer-events-none">
+          <div className="max-w-4xl mx-auto">
+            <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-4 text-ink hover:text-royal transition-colors shrink-0"
-              title="Upload files"
+              className="pointer-events-auto w-full p-6 rough-border is-dashed is-royal text-royal bg-paper flex items-center justify-center gap-3 font-bold hover:bg-royal/5 transition-colors"
             >
-              <Paperclip size={24} />
+              <Paperclip size={20} /> Attach your lesson plan &mdash; PDF or plain text
             </button>
-
-            <input 
-              type="text" 
-              value={buildInput}
-              onChange={e => setBuildInput(e.target.value)}
-              placeholder="What are we doing next?" 
-              className="flex-grow bg-transparent outline-none py-4 font-sans text-lg placeholder-ink placeholder-opacity-40"
-              autoFocus
-            />
-            
-            <button 
-              type="submit"
-              disabled={!buildInput.trim()}
-              className="p-4 md:px-8 rough-button font-bold flex items-center justify-center gap-2 hover:bg-ink hover:text-paper transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="hidden sm:inline">Send</span><Send size={20} className="sm:ml-2" />
-            </button>
-          </form>
+          </div>
         </div>
+      )}
+
+      <Composer
+        value={input}
+        onChange={setInput}
+        onSubmit={handleSubmit}
+        placeholder={placeholder}
+        disabled={!canType}
+        allowAttach={phase === 'awaiting_plan'}
+        attachment={attachment}
+        onAttachClick={() => fileInputRef.current?.click()}
+        onClearAttachment={() => setAttachment(null)}
+      />
+      <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+type ComposerProps = {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: (e: React.FormEvent) => void
+  placeholder: string
+  disabled: boolean
+  allowAttach: boolean
+  attachment: { name: string } | null
+  onAttachClick: () => void
+  onClearAttachment: () => void
+  autoFocus?: boolean
+}
+
+function Composer({
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  disabled,
+  allowAttach,
+  attachment,
+  onAttachClick,
+  onClearAttachment,
+  autoFocus,
+}: ComposerProps) {
+  const canSend = !disabled && (value.trim().length > 0 || Boolean(attachment))
+
+  return (
+    <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-paper via-paper to-transparent z-50">
+      <div className="max-w-4xl mx-auto flex flex-col gap-2">
+        {attachment && (
+          <div className="flex animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="px-3 py-2 bg-ink text-paper text-sm font-mono flex items-center gap-2 rough-border">
+              <FileText size={14} /> {attachment.name}
+              <button onClick={onClearAttachment} className="ml-1 opacity-70 hover:opacity-100">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <form
+          onSubmit={onSubmit}
+          className="flex gap-2 p-2 bg-paper rough-border sketch-box-shadow-blue items-center focus-within:-translate-y-1 focus-within:-translate-x-1 focus-within:shadow-none transition-transform"
+        >
+          {allowAttach && (
+            <button
+              type="button"
+              onClick={onAttachClick}
+              className="p-4 text-ink hover:text-royal transition-colors shrink-0"
+              title="Attach a lesson plan"
+            >
+              <Paperclip size={22} />
+            </button>
+          )}
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            className="flex-grow bg-transparent outline-none p-4 font-sans text-base md:text-lg placeholder-ink placeholder-opacity-40 disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={!canSend}
+            className="p-4 md:px-8 rough-button-blue font-bold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="hidden sm:inline">Send</span>
+            <Send size={20} className="sm:ml-2" />
+          </button>
+        </form>
       </div>
     </div>
-  );
+  )
+}
+
+/** Counts up during the long structured-output calls so the wait looks alive. */
+function Elapsed() {
+  const [seconds, setSeconds] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  if (seconds < 5) return null
+  return <span className="font-mono text-sm opacity-40 tabular-nums">{seconds}s</span>
 }
