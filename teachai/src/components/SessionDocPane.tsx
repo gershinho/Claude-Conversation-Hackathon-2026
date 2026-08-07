@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Check, FileText, Minimize2 } from 'lucide-react'
+import { Check, FileText, Flag, Minimize2 } from 'lucide-react'
 import { diffLines } from '@/lib/diff'
 import { renderMarkdownLine } from '@/lib/markdown'
 import type { RubricItem } from '@/lib/schemas'
@@ -16,6 +16,8 @@ export default function SessionDocPane({
   prevDoc,
   version,
   rubric,
+  canWrapUp,
+  onWrapUp,
   onMinimize,
 }: {
   filename: string
@@ -23,6 +25,8 @@ export default function SessionDocPane({
   prevDoc: string | null
   version: number
   rubric: RubricItem[]
+  canWrapUp: boolean
+  onWrapUp: () => void
   onMinimize: () => void
 }) {
   const blocks = useMemo(() => diffLines(prevDoc ?? doc, doc), [doc, prevDoc])
@@ -55,6 +59,15 @@ export default function SessionDocPane({
             />
           </div>
         </div>
+        {canWrapUp && (
+          <button
+            onClick={onWrapUp}
+            className="px-3 py-1.5 bg-royal text-paper text-xs font-bold flex items-center gap-1.5 rough-border-blue hover:-translate-y-0.5 transition-transform shrink-0"
+            title="Finish here — download your plan and see your skill report"
+          >
+            <Flag size={12} /> Wrap up
+          </button>
+        )}
         <button
           onClick={onMinimize}
           className="hover:text-royal transition-colors bg-paper text-ink p-1 rounded shrink-0"

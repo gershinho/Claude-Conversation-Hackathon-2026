@@ -276,7 +276,9 @@ export const LESSON_PLAN_SCHEMA = {
 } as const
 
 // ---------------------------------------------------------------------------
-// Guided session — one turn of the A→B prompting loop
+// Guided session — one turn of the A→B prompting loop, split into two calls:
+// a fast judge/chat call (small model) and, only on pass, the document edit
+// (big model). Gates and questions never pay for a full-document response.
 // ---------------------------------------------------------------------------
 
 export type BuddyMood = 'idle' | 'thinking' | 'excited' | 'nudge' | 'celebrate'
@@ -288,11 +290,14 @@ export type PromptFeedback = {
   tip: string
 }
 
-export type SessionTurn = {
+export type TurnJudgement = {
   verdict: 'pass' | 'gate' | 'answer'
   buddy_message: string
   buddy_mood: BuddyMood
   prompt_feedback: PromptFeedback
+}
+
+export type DocEdit = {
   updated_document: string
   rubric: { id: string; satisfied: boolean }[]
   first_change_hint: string
@@ -319,24 +324,16 @@ export function buildRubric(analysis: Analysis): RubricItem[] {
   }))
 }
 
-export const SESSION_TURN_SCHEMA = {
+export const TURN_JUDGE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: [
-    'verdict',
-    'buddy_message',
-    'buddy_mood',
-    'prompt_feedback',
-    'updated_document',
-    'rubric',
-    'first_change_hint',
-  ],
+  required: ['verdict', 'buddy_message', 'buddy_mood', 'prompt_feedback'],
   properties: {
     verdict: {
       type: 'string',
       enum: ['pass', 'gate', 'answer'],
       description:
-        'pass = apply her edit to the document. gate = intercept a clearly vague prompt, document unchanged. answer = she asked a question; reply in the bubble, document unchanged.',
+        'pass = her edit should be applied to the document. gate = intercept a clearly vague prompt, document unchanged. answer = she asked a question; reply in the bubble, document unchanged.',
     },
     buddy_message: {
       type: 'string',
@@ -346,7 +343,8 @@ export const SESSION_TURN_SCHEMA = {
     buddy_mood: {
       type: 'string',
       enum: ['idle', 'thinking', 'excited', 'nudge', 'celebrate'],
-      description: 'excited when she lands a move or a rubric item flips, nudge when gating or coaching, celebrate only when every rubric item is satisfied.',
+      description:
+        'excited when she lands a move, nudge when gating or coaching, celebrate only when every rubric item in RUBRIC STATE is already satisfied.',
     },
     prompt_feedback: {
       type: 'object',
@@ -365,15 +363,23 @@ export const SESSION_TURN_SCHEMA = {
         tip: { type: 'string', description: 'One-line transferable prompting tip, or "".' },
       },
     },
+  },
+} as const
+
+export const DOC_EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['updated_document', 'rubric', 'first_change_hint'],
+  properties: {
     updated_document: {
       type: 'string',
       description:
-        'The COMPLETE document markdown after applying exactly what she asked — nothing more. Empty string when verdict is gate or answer.',
+        'The COMPLETE document markdown after applying exactly what she asked — nothing more.',
     },
     rubric: {
       type: 'array',
       description:
-        'The complete rubric state after this turn, every item re-judged against the current document. An edit that undoes progress flips its item back to false.',
+        'The complete rubric state, every item re-judged against the new document. An edit that undoes progress flips its item back to false.',
       items: {
         type: 'object',
         additionalProperties: false,
@@ -386,8 +392,7 @@ export const SESSION_TURN_SCHEMA = {
     },
     first_change_hint: {
       type: 'string',
-      description:
-        'The exact first line of the earliest section you changed, so the UI can scroll to it. Empty string when verdict is gate or answer.',
+      description: 'The exact first line of the earliest section you changed, so the UI can scroll to it.',
     },
   },
 } as const

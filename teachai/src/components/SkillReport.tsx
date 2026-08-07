@@ -34,6 +34,9 @@ export default function SkillReport({
   const coached = unique(records.map((r) => r.coached_move)).filter((m) => !used.includes(m))
   const tips = unique(records.map((r) => r.tip)).slice(0, 3)
 
+  const fixed = rubric.filter((r) => r.satisfied).length
+  const worklist = rubric.filter((r) => !r.satisfied)
+
   const firstPrompt = records[0]
   const bestPrompt =
     [...records].reverse().find((r) => r.quality === 'strong') ?? records[records.length - 1]
@@ -111,10 +114,23 @@ export default function SkillReport({
         </section>
       )}
 
+      {worklist.length > 0 && (
+        <section className="border-t-2 border-dashed border-ink pt-4">
+          <p className="font-mono text-xs uppercase tracking-widest opacity-50 mb-2">Still on the worklist</p>
+          <ul className="flex flex-col gap-1.5">
+            {worklist.map((r) => (
+              <li key={r.id} className="text-sm leading-relaxed">
+                &mdash; {r.title} &middot; try: <span className="italic">{r.move}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 border-t-2 border-dashed border-ink pt-5">
         <p className="text-sm opacity-60">
-          {rubric.length} weaknesses fixed, by you, with {records.length} prompts. Same moves work on next
-          week&rsquo;s lesson &mdash; no Claw&rsquo;d required.
+          {fixed} of {rubric.length} weaknesses fixed, by you, with {records.length} prompts. Same moves work
+          on next week&rsquo;s lesson &mdash; no Claw&rsquo;d required.
         </p>
         <button
           onClick={download}

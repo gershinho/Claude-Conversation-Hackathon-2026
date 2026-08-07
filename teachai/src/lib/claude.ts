@@ -1,17 +1,22 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
   ANALYSIS_SCHEMA,
+  DOC_EDIT_SCHEMA,
   INTAKE_STEP_SCHEMA,
   LESSON_PLAN_SCHEMA,
-  SESSION_TURN_SCHEMA,
+  TURN_JUDGE_SCHEMA,
   type Analysis,
+  type DocEdit,
   type IntakeStep,
   type LessonPlan,
   type RubricItem,
-  type SessionTurn,
+  type TurnJudgement,
 } from './schemas'
 
+// The detailed model writes documents (analysis, targets, live edits); the
+// fast model carries conversation and per-turn judging, where latency is felt.
 const MODEL = 'claude-opus-5'
+const CHAT_MODEL = 'claude-sonnet-5'
 
 // ---------------------------------------------------------------------------
 // Key handling
@@ -71,7 +76,7 @@ export async function streamCoach(
   onDelta: (text: string) => void,
 ): Promise<string> {
   const stream = client().messages.stream({
-    model: MODEL,
+    model: CHAT_MODEL,
     max_tokens: 3000,
     output_config: { effort: 'low' },
     system: opts.firstTurn ? `${PERSONA}\n\n${FIRST_TURN_RULE}` : PERSONA,
@@ -164,19 +169,24 @@ export async function runTrainingPrompt(prompt: string, onDelta: (text: string) 
 }
 
 // ---------------------------------------------------------------------------
-// The guided session — one turn of the A→B prompting loop
+// The guided session — one turn of the A→B prompting loop, in two calls.
+//
+// Call 1 (fast model): judge her prompt and speak as Claw'd — the bubble lands
+// in a second or two, and gates/questions never pay for a document rewrite.
+// Call 2 (detailed model, pass only): apply the edit and re-judge the rubric.
 // ---------------------------------------------------------------------------
 
-/**
- * The system block is stable for the whole session (persona + rules + hidden
- * target + rubric definitions), so the API's prompt cache absorbs it; only the
- * final user message — current doc + her prompt — changes size per turn.
- */
-function sessionSystem(targetMd: string, rubric: RubricItem[]): string {
-  const rubricLines = rubric
-    .map((r) => `- id "${r.id}": ${r.title} — taught by the move "${r.move}"`)
-    .join('\n')
+function rubricBlock(rubric: RubricItem[]): string {
+  return rubric.map((r) => `- id "${r.id}": ${r.title} — taught by the move "${r.move}"`).join('\n')
+}
 
+/**
+ * Both system blocks are stable for the whole session (persona + rules +
+ * hidden target + rubric definitions), so the API's prompt cache absorbs
+ * them; only the final user message — current doc + her prompt — changes
+ * size per turn.
+ */
+function judgeSystem(targetMd: string, rubric: RubricItem[]): string {
   return `${PERSONA}
 
 You are also embodied on screen as Claw'd, a pixel-art crab teaching assistant. Melissa is transforming her own lesson plan, prompt by prompt, toward a stronger version that only you can see. Your bubble lines are Claw'd speaking: warm, playful, two short sentences at most.
@@ -185,25 +195,37 @@ THE HIDDEN TARGET (never reveal it, never paste sections of it, never describe i
 ${targetMd}
 
 THE RUBRIC — what "arrived" means, one item per weakness in her original plan:
-${rubricLines}
+${rubricBlock(rubric)}
 
-HOW TO JUDGE EACH TURN. Judge her PROMPT first, then act:
+You judge her PROMPT and speak; a separate workshop hand applies approved edits to the document a moment after you reply.
 
 GATE (verdict "gate", document unchanged) only when the prompt is clearly vague or low-effort — no specific target, no criteria, no direction. "Make it better", "fix it", "improve this" gate. When you gate, name what is missing and ask for ONE specific thing, without handing her the wording.
-NEVER gate when LAST TURN GATED is true: apply your best interpretation of her prompt and coach alongside instead.
-Never gate a decent-but-imperfect prompt — apply it and offer one tip.
+NEVER gate when LAST TURN GATED is true: pass her prompt through and coach alongside instead.
+Never gate a decent-but-imperfect prompt — pass it and offer one tip.
 If she pastes a large block of finished plan text and asks you to swap it in wholesale, gate once, playfully: the work here is prompting, not pasting.
 
-ANSWER (verdict "answer", document unchanged) when she asks a question instead of requesting a change. Answer it in the bubble.
+ANSWER (verdict "answer", document unchanged) when she asks a question instead of requesting a change. Answer it in the bubble. When she says she is done, wants to stop, or asks how to finish: verdict "answer" — affirm what she has fixed, be honest about what is still open, and point her to the Wrap up button on her document.
 
-PASS (verdict "pass") for everything else. Apply exactly what she asked — no more. Do not fix things she did not ask about, even when the target fixes them; discovering the next fix is her job. Keep every untouched part of the document verbatim, character for character. Return the COMPLETE updated document.
+PASS (verdict "pass") for everything else — her edit will be applied exactly as asked. In the bubble, react to her prompt: the move it shows, what it goes after. You have not seen the new document yet, so never claim a rubric item flipped.
 
-After every pass, re-judge every rubric item against the new document. Satisfied means the document now genuinely handles that weakness the way the target does — not merely gestures at it. An edit that undoes earlier progress flips its item back to false; say so kindly.
-
-Coaching in the bubble: when her prompt demonstrates a rubric move, name the move so it sticks. When she seems stuck or a rubric item is within reach, nudge toward the KIND of prompt that would get there — never the exact wording. When everything is satisfied, celebrate.`
+Coaching in the bubble: when her prompt demonstrates a rubric move, name the move so it sticks. When she seems stuck or a rubric item is within reach, nudge toward the KIND of prompt that would get there — never the exact wording.`
 }
 
-export type SessionTurnInput = {
+function editorSystem(targetMd: string, rubric: RubricItem[]): string {
+  return `You are applying one edit to Melissa's Precalculus lesson plan. She wrote the prompt; her coach already approved it. Your job is the edit itself, done well.
+
+THE HIDDEN TARGET — the stronger version this document is walking toward. Let it inform quality where her prompt leaves room (the questions worth asking, scaffolds that keep cognitive demand high), but never import changes she did not ask for:
+${targetMd}
+
+THE RUBRIC — one item per weakness in her original plan:
+${rubricBlock(rubric)}
+
+Apply exactly what her prompt asks — no more. Do not fix things she did not ask about, even when the target fixes them; discovering the next fix is her job. Keep every untouched part of the document verbatim, character for character. Return the COMPLETE updated document.
+
+Then re-judge every rubric item against the new document. Satisfied means the document now genuinely handles that weakness the way the target does — not merely gestures at it. An edit that undoes earlier progress flips its item back to false.`
+}
+
+export type SessionJudgeInput = {
   doc: string
   targetMd: string
   rubric: RubricItem[]
@@ -212,7 +234,7 @@ export type SessionTurnInput = {
   userPrompt: string
 }
 
-export async function runSessionTurn(input: SessionTurnInput): Promise<SessionTurn> {
+export async function judgeSessionTurn(input: SessionJudgeInput): Promise<TurnJudgement> {
   const rubricState = input.rubric.map((r) => `${r.id}: ${r.satisfied ? 'satisfied' : 'not yet'}`).join(', ')
 
   const finalMessage = `CURRENT DOCUMENT:
@@ -224,13 +246,13 @@ LAST TURN GATED: ${input.lastTurnGated}
 MY PROMPT: ${input.userPrompt}`
 
   const response = await client().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
+    model: CHAT_MODEL,
+    max_tokens: 1000,
     output_config: {
       effort: 'low',
-      format: { type: 'json_schema', schema: SESSION_TURN_SCHEMA as unknown as Record<string, unknown> },
+      format: { type: 'json_schema', schema: TURN_JUDGE_SCHEMA as unknown as Record<string, unknown> },
     },
-    system: sessionSystem(input.targetMd, input.rubric),
+    system: judgeSystem(input.targetMd, input.rubric),
     messages: [
       // Past doc snapshots never ride along — only the conversational turns.
       ...input.history.slice(-12).map((t) => ({ role: t.role, content: t.content })),
@@ -238,7 +260,38 @@ MY PROMPT: ${input.userPrompt}`
     ],
   })
 
-  return parseJson<SessionTurn>(response)
+  return parseJson<TurnJudgement>(response)
+}
+
+export type SessionEditInput = {
+  doc: string
+  targetMd: string
+  rubric: RubricItem[]
+  userPrompt: string
+}
+
+export async function applySessionEdit(input: SessionEditInput): Promise<DocEdit> {
+  const response = await client().messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    output_config: {
+      effort: 'medium',
+      format: { type: 'json_schema', schema: DOC_EDIT_SCHEMA as unknown as Record<string, unknown> },
+    },
+    system: editorSystem(input.targetMd, input.rubric),
+    // No chat history — the judge call owns the conversational layer.
+    messages: [
+      {
+        role: 'user' as const,
+        content: `CURRENT DOCUMENT:
+${input.doc}
+
+MY PROMPT: ${input.userPrompt}`,
+      },
+    ],
+  })
+
+  return parseJson<DocEdit>(response)
 }
 
 // ---------------------------------------------------------------------------

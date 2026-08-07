@@ -19,12 +19,13 @@ import AskCard from '@/components/AskCard'
 import PlanCard, { toMarkdown } from '@/components/PlanCard'
 import {
   analyzeLessonPlan,
+  applySessionEdit,
   buildImprovedPlan,
   buildPlanFromScratch,
   friendlyError,
   INTAKE_CAP,
+  judgeSessionTurn,
   nextIntakeStep,
-  runSessionTurn,
   streamCoach,
   type ChatTurn,
   type IntakeQA,
@@ -214,7 +215,8 @@ export default function App() {
     setInput('')
     add({ kind: 'user', text })
 
-    if (phase === 'session') {
+    // session_done keeps the loop alive: the report is an offer, not a wall.
+    if (phase === 'session' || phase === 'session_done') {
       await runTurn(text)
       return
     }
@@ -414,7 +416,9 @@ export default function App() {
     say('thinking', 'divider', '')
 
     try {
-      const turn = await runSessionTurn({
+      // Fast call first: verdict + Claw'd's bubble land in a second or two.
+      // Only a pass pays for the slow document rewrite, which runs second.
+      const judged = await judgeSessionTurn({
         doc: session.doc,
         targetMd: session.targetMd,
         rubric: session.rubric,
@@ -428,22 +432,53 @@ export default function App() {
       const history: ChatTurn[] = [
         ...session.history,
         { role: 'user', content: prompt },
-        { role: 'assistant', content: turn.buddy_message },
+        { role: 'assistant', content: judged.buddy_message },
       ]
-      const feedback = [...session.feedback, { ...turn.prompt_feedback, prompt }]
+      const feedback = [...session.feedback, { ...judged.prompt_feedback, prompt }]
 
-      if (turn.verdict === 'pass' && turn.updated_document.trim()) {
-        const satisfiedById = new Map(turn.rubric.map((r) => [r.id, r.satisfied]))
+      if (judged.verdict === 'gate') {
+        setSession({ ...session, history, lastTurnGated: true, feedback })
+        say('nudge', 'composer', judged.buddy_message)
+        return
+      }
+
+      if (judged.verdict === 'answer') {
+        setSession({ ...session, history, lastTurnGated: false, feedback })
+        say(judged.buddy_mood === 'celebrate' ? 'excited' : judged.buddy_mood, 'composer', judged.buddy_message)
+        return
+      }
+
+      // Pass: the bubble is already up while the detailed model writes the edit.
+      say('thinking', 'doc-change', judged.buddy_message)
+
+      try {
+        const edit = await applySessionEdit({
+          doc: session.doc,
+          targetMd: session.targetMd,
+          rubric: session.rubric,
+          userPrompt: prompt,
+        })
+
+        if (!edit.updated_document.trim()) {
+          setSession({ ...session, history, lastTurnGated: false, feedback })
+          say(judged.buddy_mood, 'composer', judged.buddy_message)
+          return
+        }
+
+        const satisfiedById = new Map(edit.rubric.map((r) => [r.id, r.satisfied]))
         const rubric = session.rubric.map((r) => ({
           ...r,
           satisfied: satisfiedById.get(r.id) ?? r.satisfied,
         }))
         const gained = rubric.some((r, i) => r.satisfied && !session.rubric[i].satisfied)
         const done = rubric.every((r) => r.satisfied)
+        // Wrapping up is a one-time beat — post-report passes keep editing
+        // without re-firing the celebration or stacking a second report.
+        const wrapped = phase === 'session_done' || items.some((i) => i.kind === 'skills')
 
         setSession({
           ...session,
-          doc: turn.updated_document,
+          doc: edit.updated_document,
           prevDoc: session.doc,
           rubric,
           history,
@@ -452,8 +487,8 @@ export default function App() {
         })
         setVersion((v) => v + 1)
 
-        if (done) {
-          say('celebrate', 'center-stage', turn.buddy_message)
+        if (done && !wrapped) {
+          say('celebrate', 'center-stage', judged.buddy_message)
           choreo.current.push(
             window.setTimeout(() => {
               setPhase('session_done')
@@ -463,18 +498,16 @@ export default function App() {
         } else {
           // Scuttle over to what just changed, then wander home. A flipped
           // rubric item earns a hop to the progress bar on the way.
-          say(turn.buddy_mood, 'doc-change', turn.buddy_message)
-          if (gained) sayAfter(3000, 'excited', 'progress', turn.buddy_message)
-          sayAfter(gained ? 5600 : 4500, 'idle', 'composer', turn.buddy_message)
+          say(done ? 'excited' : judged.buddy_mood, 'doc-change', judged.buddy_message)
+          if (gained) sayAfter(3000, 'excited', 'progress', judged.buddy_message)
+          sayAfter(gained ? 5600 : 4500, 'idle', 'composer', judged.buddy_message)
         }
-      } else if (turn.verdict === 'gate') {
-        setSession({ ...session, history, lastTurnGated: true, feedback })
-        say('nudge', 'composer', turn.buddy_message)
-      } else {
-        // 'answer', or a pass that came back without a document — either way
-        // the doc is untouched and the bubble carries the reply.
+      } catch (err) {
+        // The judge approved but the edit failed — keep the bubble and the
+        // conversation, leave the document untouched.
         setSession({ ...session, history, lastTurnGated: false, feedback })
-        say(turn.buddy_mood === 'celebrate' ? 'excited' : turn.buddy_mood, 'composer', turn.buddy_message)
+        fail(err)
+        say('idle', 'composer', 'I heard you — but the edit slipped out of my claws. Send it again?')
       }
     } catch (err) {
       fail(err)
@@ -482,6 +515,23 @@ export default function App() {
     } finally {
       setSessionBusy(false)
     }
+  }
+
+  /** Her call, not the rubric's: end the session here, honestly. */
+  const wrapUp = () => {
+    if (!session || phase !== 'session') return
+    const fixed = session.rubric.filter((r) => r.satisfied).length
+    const total = session.rubric.length
+    setPhase('session_done')
+    add({ kind: 'skills' })
+    say(
+      'excited',
+      'center-stage',
+      fixed === total
+        ? 'Every weakness handled, by your own prompts. Your report and download are below!'
+        : `Good call — ${fixed} of ${total} fixed by your own prompts. Your report and download are below.`,
+    )
+    sayAfter(4000, 'idle', 'composer', '')
   }
 
   // -- attachments ----------------------------------------------------------
@@ -586,9 +636,11 @@ export default function App() {
         ? 'Tell your document what to change...'
         : phase === 'intake'
           ? 'Type your answer, or tap an option above...'
-          : phase === 'session_done' || phase === 'done'
-            ? 'What else do you want to work on?'
-            : 'Say more...'
+          : phase === 'session_done'
+            ? 'Keep polishing your plan, or download it from your report...'
+            : phase === 'done'
+              ? 'What else do you want to work on?'
+              : 'Say more...'
 
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-paper text-ink font-sans selection:bg-royal selection:text-paper">
@@ -783,6 +835,8 @@ export default function App() {
               prevDoc={session.prevDoc}
               version={version}
               rubric={session.rubric}
+              canWrapUp={phase === 'session' && !sessionBusy && session.rubric.some((r) => r.satisfied)}
+              onWrapUp={wrapUp}
               onMinimize={() => setDocMinimized(true)}
             />
           ) : (
