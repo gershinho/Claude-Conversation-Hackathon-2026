@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Space Mono', monospace;
+  --font-display: 'Caveat', cursive;
+  --color-royal: #1a4fd6;
+  --color-ink: #0d0d0d;
+  --color-paper: #ffffff;
+}
+
+@layer base {
+  :root {
+    --background: var(--color-paper);
+    --foreground: var(--color-ink);
+    --primary: var(--color-royal);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.rough-border {
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border: 2px solid var(--color-ink);
+}
+
+.rough-border-blue {
+  border-radius: 15px 255px 15px 225px/225px 15px 255px 15px;
+  border: 2px solid var(--color-royal);
+}
+
+.rough-button {
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border: 2px solid var(--color-ink);
+  transition: all 0.2s ease;
+  background-color: var(--color-paper);
+}
+
+.rough-button:hover {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  border-radius: 15px 255px 15px 225px/225px 15px 255px 15px;
+}
+
+.rough-button-blue {
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border: 2px solid var(--color-royal);
+  transition: all 0.2s ease;
+  background-color: var(--color-royal);
+  color: var(--color-paper);
+}
+
+.rough-button-blue:hover {
+  background-color: var(--color-paper);
+  color: var(--color-royal);
+  border-radius: 15px 255px 15px 225px/225px 15px 255px 15px;
+}
+
+.scribble-underline {
+  position: relative;
+  display: inline-block;
+}
+
+.scribble-underline::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 6px;
+  bottom: -4px;
+  left: 0;
+  background: var(--color-royal);
+  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  transform: rotate(-1deg);
+}
+
+.sketch-box-shadow {
+  box-shadow: 4px 4px 0px 0px var(--color-ink);
+}
+
+.sketch-box-shadow-blue {
+  box-shadow: -4px 4px 0px 0px var(--color-royal);
+}
